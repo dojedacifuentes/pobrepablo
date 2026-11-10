@@ -46,7 +46,7 @@ Fuente: `docs/ESPECIFICACION.md` §9. Antes de empezar una fase, lee las seccion
 - **Salida:** pruebas unitarias y de propiedades de §4.3 en verde. Revisión del subagente `revisor-financiero` sin
   hallazgos abiertos.
 
-## Fase 3 · Datos locales
+## Fase 3 · Datos locales — hecha (10-nov-2026)
 
 - Leer: §3.2, §3.3, §10 (Datos), y en `docs/ESTADO.md` las seis tareas que la revisión de la fase 2 dejó para esta
   fase (índice único de confirmaciones, registros del Hogar en una misma transacción, `rescheduleRule`, categorías).
@@ -59,6 +59,8 @@ Fuente: `docs/ESPECIFICACION.md` §9. Antes de empezar una fase, lee las seccion
 - **Salida:** prueba de ida y vuelta: exportar → borrar → importar deja la base idéntica, con y sin cifrado. Prueba de
   propiedades: importar dos veces el mismo respaldo deja la base idéntica (invariante de §4.3 que quedó para esta
   fase).
+- **Cómo quedó:** la ida y vuelta deja la base idéntica **más una entrada de auditoría** que dice que se restauró un
+  respaldo (ADR 0009). Revisión independiente con 18 hallazgos, todos corregidos.
 
 ## Fase 4 · Rebanada vertical
 

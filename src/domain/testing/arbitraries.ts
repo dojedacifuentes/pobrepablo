@@ -436,3 +436,64 @@ export const arbSnapshotInput: fc.Arbitrary<SnapshotInput> = fc
 
     return { ...input, transactions, cancelledOccurrences }
   })
+
+/**
+ * A whole financial situation in which a programmed expense is certainly being counted twice:
+ * it is still waiting, and a shared expense of the same category and the same month, paid by the
+ * other member of the household, already charged the person their part.
+ *
+ * Fewer than two random situations in a hundred contain that by chance, so a property that needs
+ * it cannot rely on luck: here the pair is always put in. It uses a category of its own, so that
+ * it never collides with what the rest of the situation generates.
+ */
+export const arbCoverableSnapshotInput: fc.Arbitrary<SnapshotInput> = fc
+  .record({
+    input: arbSnapshotInput,
+    amount: arbAmount(800_000),
+    // At least two pesos: split in two, one peso would leave one of the two members with no part.
+    total: fc.integer({ min: 2, max: 1_000_000 }).map(money),
+    day: fc.integer({ min: 1, max: 28 }),
+    monthsBack: fc.integer({ min: 0, max: 2 }),
+    amountIsEstimate: fc.boolean(),
+    onCard: fc.boolean(),
+  })
+  .map(({ input, amount, total, day, monthsBack, amountIsEstimate, onCard }): SnapshotInput => {
+    const household = input.household
+    if (household === undefined) {
+      return input
+    }
+    const other = household.members.find((member) => member !== household.memberId) ?? household.memberId
+    // Never before April: by then every account of these situations is open.
+    const month = Math.max(4, Number(input.today.slice(5, 7)) - monthsBack)
+    const dueDate = d(`2026-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`)
+    const rule: RecurringRule = {
+      id: toId('rule-covered'),
+      kind: 'expense',
+      label: 'rule-covered',
+      amount,
+      amountIsEstimate,
+      accountId: onCard ? CARD : CHECKING,
+      categoryId: cat('internet'),
+      frequency: 'yearly',
+      interval: 1,
+      startDate: dueDate,
+      paused: false,
+    }
+    const expense: SharedExpense = {
+      id: toId('shared-covering'),
+      // The first day of that month is never after today.
+      date: d(`2026-${String(month).padStart(2, '0')}-01`),
+      description: 'gasto común que cubre',
+      categoryId: cat('internet'),
+      total,
+      payerId: other,
+      shares: household.members.map((participantId) => ({ participantId, weight: 1 })),
+      authorId: other,
+      voided: false,
+    }
+    return {
+      ...input,
+      rules: [...input.rules, rule],
+      household: { ...household, expenses: [...household.expenses, expense] },
+    }
+  })

@@ -8,7 +8,14 @@ import { toId } from './ids'
 import { type SnapshotInput, financialSnapshot } from './magnitudes'
 import { ZERO, add, subtract, sum } from './money'
 import { confirmOccurrence, duplicateConfirmations, isAwaiting, isConfirmedByMovement } from './recurring'
-import { ALL_ACCOUNTS, arbAccountPair, arbAmount, arbExtraTransaction, arbSnapshotInput } from './testing/arbitraries'
+import {
+  ALL_ACCOUNTS,
+  arbAccountPair,
+  arbAmount,
+  arbCoverableSnapshotInput,
+  arbExtraTransaction,
+  arbSnapshotInput,
+} from './testing/arbitraries'
 import { CARD, CHECKING, expense, transfer } from './testing/builders'
 import { balanceDeltas, voidTransaction } from './transactions'
 
@@ -193,14 +200,17 @@ describe('coherencia entre magnitudes', () => {
 
   it('marcar que un gasto compartido cubre un gasto programado quita exactamente esa obligación', () => {
     fc.assert(
-      fc.property(arbSnapshotInput, (input) => {
+      // The situation always contains a programmed expense that a shared one could cover: by
+      // chance that happens in one random situation out of a hundred, too few to rely on.
+      fc.property(arbCoverableSnapshotInput, (input) => {
         const household = input.household
         if (household === undefined) {
-          return
+          throw new Error('la situación generada no tiene hogar')
         }
         const before = financialSnapshot(input)
-        const [candidate] = coverageCandidates(before.occurrences, household.memberId, household.expenses, [], input.today)
-        fc.pre(candidate !== undefined)
+        const candidates = coverageCandidates(before.occurrences, household.memberId, household.expenses, [], input.today)
+        expect(candidates.length).toBeGreaterThan(0)
+        const [candidate] = candidates
         if (candidate === undefined) {
           return
         }

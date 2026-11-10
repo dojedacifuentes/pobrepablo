@@ -7,6 +7,9 @@ import tseslint from 'typescript-eslint'
 const PURE_LAYER =
   'domain/ y narrative/ son puros: sin reloj del sistema, sin azar, sin navegador y sin otras capas. Recibe un reloj o un generador inyectado.'
 
+const SCREENS =
+  'Las pantallas no tocan la base de datos: importan desde «@/data» (hooks y operaciones), nunca Dexie ni archivos internos de data/.'
+
 export default defineConfig([
   globalIgnores(['dist', 'dev-dist', 'coverage', 'playwright-report', 'test-results', 'capturas']),
 
@@ -72,6 +75,43 @@ export default defineConfig([
             {
               group: ['**/data/**', '**/features/**', '**/ui/**', '**/app/**', '@/data/**', '@/features/**', '@/ui/**', '@/app/**'],
               message: PURE_LAYER,
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // The screens read and write through `@/data` and nothing deeper (ADR 0003): the database
+  // behind it must be replaceable without touching a single screen.
+  {
+    files: ['src/features/**/*.{ts,tsx}', 'src/ui/**/*.{ts,tsx}', 'src/app/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'dexie', message: SCREENS },
+            { name: 'dexie-react-hooks', message: SCREENS },
+            { name: 'fake-indexeddb', message: SCREENS },
+          ],
+          patterns: [{ group: ['@/data/*', '**/data/*', '**/data/**/*'], message: SCREENS }],
+        },
+      ],
+    },
+  },
+
+  // The data layer serves the screens; it never depends on them.
+  {
+    files: ['src/data/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/features/**', '**/ui/**', '**/app/**', '@/features/**', '@/ui/**', '@/app/**'],
+              message: 'data/ no depende de las pantallas: solo de domain/.',
             },
           ],
         },

@@ -129,14 +129,14 @@ regla del día 31 cae el 28 o 29 de febrero y vuelve al 31 en marzo.
   con presupuesto con fondo (ese pago consume el presupuesto de este mes; registrado con su fecha original, no).
 - Las cuotas solo existen para un gasto con cargo a una tarjeta: pedirlas en otra cuenta se rechaza.
 - **No se puede confirmar dos veces.** La segunda confirmación se rechaza aunque la pantalla siga mostrando la
-  ocurrencia vieja. (En la fase 3 se suma un índice único en la base, para el caso de dos escrituras simultáneas.)
+  ocurrencia vieja. La base agrega un índice único por regla y fecha, para el caso de dos escrituras simultáneas.
 - **No se confirma con fecha futura.** Pagar por adelantado se registra con la fecha de hoy.
 - Si se anula el movimiento, la ocurrencia vuelve a quedar pendiente.
 - **El calendario de una regla no se edita en el lugar**, porque sus ocurrencias se identifican por fecha y los pagos
   ya confirmados quedarían huérfanos. Para cambiarlo, `rescheduleRule` cierra la regla y crea otra desde la fecha
   nueva. No alarga una regla que ya había terminado, y no deja cortar antes de un pago que ya se hizo por adelantado.
-  (El dominio no puede impedir que alguien edite la fecha de inicio directamente: la capa de datos de la fase 3 solo
-  ofrecerá `rescheduleRule`.)
+  (El dominio no puede impedir que alguien edite la fecha de inicio directamente: lo impide la capa de datos, que solo
+  ofrece `rescheduleRule` y además rechaza un corte que deje huérfana una cobertura.)
 - Si existe un movimiento guardado con fecha futura que apunta a una ocurrencia, esta sigue pendiente y no se puede
   confirmar de nuevo hasta anular ese movimiento.
 - Una regla pausada no muestra nada pendiente ni vencido; lo confirmado sigue en el historial.
@@ -204,7 +204,8 @@ contradicción.
 
 - La única excepción es confirmar un recurrente como pago de gasto compartido: `confirmOccurrence` crea solo la
   salida de dinero, y el gasto compartido se registra en la misma operación. Si faltara, la revisión lo detecta.
-- Lo anterior al día en que la persona empezó a registrar no exige movimiento: su saldo inicial ya lo incluye.
+- Lo anterior al día en que la persona empezó a registrar no exige movimiento: su saldo inicial ya lo incluye. Ese
+  día es la apertura de su primera cuenta: la capa de datos lo deduce, no es una fecha que se edite.
 - Un mismo gasto o reembolso listado dos veces se rechaza, en vez de contarse doble.
 
 ### Un gasto compartido que además es recurrente (el arriendo)
@@ -282,8 +283,8 @@ Puntos donde la especificación admite más de una lectura y el modelo eligió u
     regla con fecha de término en vez de pausarla.
 14. **La tarjeta tiene un salto por ciclo, y es real:** al pasar el cierre o el día de pago entra en el horizonte la
     cuota siguiente de una compra en cuotas, y lo disponible baja ese día.
-15. **La categoría de un movimiento se valida** cuando la capa de datos entrega la lista de categorías (siempre, desde
-    la fase 3); las funciones puras aceptan no recibirla para poder probarse aisladas.
+15. **La categoría de un movimiento se valida** cuando la capa de datos entrega la lista de categorías, cosa que hace
+    siempre; las funciones puras aceptan no recibirla para poder probarse aisladas.
 
 ## Invariantes y dónde se prueban
 
@@ -303,7 +304,9 @@ una situación completa (se prueban aparte, en `household-ledger.test.ts`).
 | Anular devuelve todas las magnitudes al valor previo (movimientos, gastos compartidos, reembolsos, reservas) | `invariants.property.test.ts`, `household-ledger.test.ts` |
 | Los saldos internos del hogar suman cero | `household.test.ts` |
 | Recalcular desde el historial da lo mismo que los saldos incrementales, y ambos coinciden con un cálculo independiente | `balances.test.ts` |
-| Importar dos veces el mismo respaldo o paquete deja la base idéntica | **Pendiente**: fases 3 y 7, donde existe la importación |
+| Importar dos veces el mismo respaldo deja la base idéntica | `src/data/backup/backup.property.test.ts` (fase 3) |
+| Importar dos veces el mismo paquete Hogar no cambia nada | **Pendiente**: fase 7 |
+| Recalcular desde lo guardado da lo mismo que los saldos incrementales, con la base de datos de por medio | `src/data/dexie/store.property.test.ts` (fase 3) |
 
 Además: lo disponible siempre es saldo líquido − obligaciones − reservas; el patrimonio neto es la suma de todos los
 saldos más el saldo interno; confirmar en un pago un gasto programado no cambia lo disponible; con tarjeta en un pago
