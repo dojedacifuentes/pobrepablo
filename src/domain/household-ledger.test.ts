@@ -1,5 +1,6 @@
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
+import { indexAccounts } from './accounts'
 import { DomainError } from './errors'
 import {
   householdLedgerIssues,
@@ -170,6 +171,30 @@ describe('revisión de coherencia del hogar', () => {
       'duplicate_movement',
     ])
     expect(kinds(DIEGO, [paid], [groceries], [repaid])).toEqual(['settlement_without_movement'])
+  })
+
+  it('no pide movimientos de lo anterior al día en que la persona empezó a registrar', () => {
+    const old = sharedExpense('viejo', '2026-05-09', 60_000, DIEGO)
+    const oldRepaid = settlement('st-viejo', '2026-05-10', PABLO, DIEGO, 30_000)
+    expect(kinds(DIEGO, [], [old], [oldRepaid])).toEqual(['expense_without_payment', 'settlement_without_movement'])
+    expect(householdLedgerIssues(DIEGO, [], [old], [oldRepaid], d('2026-06-01'))).toEqual([])
+    // What is dated from that day on is still expected.
+    expect(householdLedgerIssues(DIEGO, [], [old, groceries], [], d('2026-06-01'))).toEqual([
+      { kind: 'expense_without_payment', sharedExpenseId: 's1' },
+    ])
+  })
+
+  it('con el contexto a la vista, el pago se valida como cualquier movimiento', () => {
+    const context = { accounts: indexAccounts(baseAccounts()), today: d('2026-11-10') }
+    const payment = { id: toId<'transaction'>('p1'), accountId: CHECKING }
+    expect(() => recordSharedExpense(groceries, DIEGO, payment, context)).not.toThrow()
+    // Paid before the account's opening balance, or dated in the future: rejected.
+    expect(() => recordSharedExpense(sharedExpense('x', '2025-12-01', 60_000, DIEGO), DIEGO, payment, context)).toThrow(
+      DomainError,
+    )
+    expect(() => recordSharedExpense(sharedExpense('x', '2026-11-11', 60_000, DIEGO), DIEGO, payment, context)).toThrow(
+      DomainError,
+    )
   })
 
   it('lo que se registra con las funciones del hogar siempre queda coherente, también tras anular', () => {

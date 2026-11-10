@@ -67,53 +67,74 @@ export interface VariableSpendHistory {
   readonly monthsAvailable: number
   /** False with fewer than three complete months: the projection then uses known commitments only. */
   readonly sufficient: boolean
-  /** For each way of paying, the cheapest month. */
+  /** The cheapest month, split by way of paying. */
   readonly lowest: VariableSpend
-  /** For each way of paying, the median month: it resists one unusual month far better than the average. */
+  /** The median month: it resists one unusual month far better than the average. */
   readonly median: VariableSpend
-  /** For each way of paying, the most expensive month. */
+  /** The most expensive month. */
   readonly highest: VariableSpend
 }
 
 const NO_SPEND: VariableSpend = { liquid: ZERO, byCard: new Map() }
 
-function orderStatistics(values: readonly Money[]): { lowest: Money; median: Money; highest: Money } {
-  const sorted = values.toSorted((a, b) => a - b)
-  const lowest = sorted[0]
-  const highest = sorted[sorted.length - 1]
-  if (lowest === undefined || highest === undefined) {
-    return { lowest: ZERO, median: ZERO, highest: ZERO }
+function totalOf(spend: VariableSpend): Money {
+  let total = spend.liquid
+  for (const amount of spend.byCard.values()) {
+    total = add(total, amount)
   }
-  const upperMiddle = sorted[Math.floor(sorted.length / 2)] ?? highest
-  const lowerMiddle = sorted[Math.floor((sorted.length - 1) / 2)] ?? lowest
-  return { lowest, median: mulDivFloor(add(lowerMiddle, upperMiddle), 1, 2), highest }
+  return total
 }
 
 /**
- * Summarises the history of everyday spending. Each way of paying is summarised on its own, so
- * that the three figures are always in order (lowest ≤ median ≤ highest) for every one of them.
+ * Summarises the history of everyday spending.
+ *
+ * The three figures are real monthly totals of the person: the cheapest month, the median and the
+ * most expensive. Each total is then split by way of paying in the proportion of the whole
+ * history, because how something is paid changes from month to month while how much is spent is
+ * what the scenario is about. A larger total never gives less for any way of paying. The split
+ * rounds down, so the parts can add up to a few pesos less than the total: it is an estimate.
  */
 export function summarizeVariableSpend(months: readonly VariableSpend[]): VariableSpendHistory {
   if (months.length === 0) {
     return { monthsAvailable: 0, sufficient: false, lowest: NO_SPEND, median: NO_SPEND, highest: NO_SPEND }
   }
-  const liquid = orderStatistics(months.map((month) => month.liquid))
-  const cardIds = [...new Set(months.flatMap((month) => [...month.byCard.keys()]))].sort()
-  const lowestByCard = new Map<AccountId, Money>()
-  const medianByCard = new Map<AccountId, Money>()
-  const highestByCard = new Map<AccountId, Money>()
-  for (const cardId of cardIds) {
-    const card = orderStatistics(months.map((month) => month.byCard.get(cardId) ?? ZERO))
-    lowestByCard.set(cardId, card.lowest)
-    medianByCard.set(cardId, card.median)
-    highestByCard.set(cardId, card.highest)
+
+  const totals = months.map(totalOf).toSorted((a, b) => a - b)
+  const lowest = totals[0] ?? ZERO
+  const highest = totals[totals.length - 1] ?? ZERO
+  const upperMiddle = totals[Math.floor(totals.length / 2)] ?? highest
+  const lowerMiddle = totals[Math.floor((totals.length - 1) / 2)] ?? lowest
+  const median = mulDivFloor(add(lowerMiddle, upperMiddle), 1, 2)
+
+  let liquidWeight = ZERO
+  const cardWeights = new Map<AccountId, Money>()
+  for (const month of months) {
+    liquidWeight = add(liquidWeight, month.liquid)
+    for (const [cardId, amount] of month.byCard) {
+      cardWeights.set(cardId, add(cardWeights.get(cardId) ?? ZERO, amount))
+    }
   }
+  const allWeight = totalOf({ liquid: liquidWeight, byCard: cardWeights })
+  const cardIds = [...cardWeights.keys()].sort()
+
+  const split = (total: Money): VariableSpend => {
+    if (allWeight === 0) {
+      return { liquid: ZERO, byCard: new Map(cardIds.map((cardId) => [cardId, ZERO])) }
+    }
+    return {
+      liquid: mulDivFloor(total, liquidWeight, allWeight),
+      byCard: new Map(
+        cardIds.map((cardId) => [cardId, mulDivFloor(total, cardWeights.get(cardId) ?? ZERO, allWeight)]),
+      ),
+    }
+  }
+
   return {
     monthsAvailable: months.length,
     sufficient: months.length >= MIN_HISTORY_MONTHS,
-    lowest: { liquid: liquid.lowest, byCard: lowestByCard },
-    median: { liquid: liquid.median, byCard: medianByCard },
-    highest: { liquid: liquid.highest, byCard: highestByCard },
+    lowest: split(lowest),
+    median: split(median),
+    highest: split(highest),
   }
 }
 
@@ -146,6 +167,11 @@ export function variableSpendByMonth(
   householdShares: readonly HouseholdShareEntry[],
   months: readonly YearMonth[],
   accounts: AccountIndex,
+  /**
+   * Shared expenses that belong to a recurring rule (the shared rent): they are projected one by
+   * one through that rule, so their parts must stay out of everyday spending.
+   */
+  recurringSharedExpenses: ReadonlySet<string> = new Set(),
 ): VariableSpend[] {
   return months.map((month) => {
     const period = monthPeriod(month)
@@ -172,7 +198,7 @@ export function variableSpendByMonth(
       }
     }
     for (const share of householdShares) {
-      if (isWithin(share.date, period)) {
+      if (isWithin(share.date, period) && !recurringSharedExpenses.has(share.sharedExpenseId)) {
         liquid = add(liquid, share.amount)
       }
     }

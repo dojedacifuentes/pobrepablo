@@ -2,11 +2,28 @@ import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { addDays } from './dates'
 import { firstActivityDate, projectFinances, projectScenarios, variableSpendHistory } from './forecast'
-import type { SnapshotInput } from './magnitudes'
+import { toId } from './ids'
+import { type SnapshotInput, ledgerState } from './magnitudes'
 import { add, subtract } from './money'
 import { SCENARIOS } from './projection'
 import { arbSnapshotInput } from './testing/arbitraries'
-import { CARD, CHECKING, SAVINGS, account, cat, clp, d, expense, rule } from './testing/builders'
+import {
+  CARD,
+  CHECKING,
+  DIEGO,
+  MEMBERS,
+  PABLO,
+  SAVINGS,
+  account,
+  cat,
+  clp,
+  d,
+  expense,
+  rule,
+  settlement,
+  settlementMove,
+  sharedExpense,
+} from './testing/builders'
 
 const today = d('2026-11-10')
 
@@ -42,8 +59,9 @@ function situation(overrides: Partial<SnapshotInput> = {}): SnapshotInput {
 describe('proyección desde los datos guardados', () => {
   it('encadena saldo, compromisos, cuotas de tarjeta e historial', () => {
     const input = situation()
-    expect(firstActivityDate(input)).toBe('2026-06-01')
-    expect(variableSpendHistory(input)).toMatchObject({ monthsAvailable: 4, sufficient: true })
+    // The first movement is of 10 July: August, September and October are the complete months.
+    expect(firstActivityDate(input, ledgerState(input, today))).toBe('2026-07-10')
+    expect(variableSpendHistory(input)).toMatchObject({ monthsAvailable: 3, sufficient: true })
 
     const projection = projectFinances(input, d('2026-12-10'), SCENARIOS.central)
     expect(projection.breakdown).toEqual({
@@ -70,6 +88,41 @@ describe('proyección desde los datos guardados', () => {
     expect(projection.usesVariableEstimate).toBe(false)
     expect(projection.breakdown.variableSpend).toBe(0)
     expect(projection.endProjected).toBe(projection.endConfirmed)
+  })
+
+  it('una cuenta abierta hace meses sin movimientos no es historial', () => {
+    const idle = situation({ transactions: [expense('primero', '2026-11-08', 20_000)] })
+    expect(variableSpendHistory(idle)).toMatchObject({ monthsAvailable: 0, sufficient: false })
+    expect(projectFinances(idle, d('2026-12-10'), SCENARIOS.central).usesVariableEstimate).toBe(false)
+  })
+
+  it('no descuenta dos veces un arriendo compartido que además está programado', () => {
+    // Pablo programmed his half of the rent. Every month Diego pays it all, shares it, and Pablo pays him back.
+    const months = ['2026-07', '2026-08', '2026-09', '2026-10']
+    const pabloRule = rule('arriendo', '2026-07-05', 200_000)
+    const input = situation({
+      accounts: [account(CHECKING, 'checking', 3_000_000, { openingDate: d('2026-06-01') })],
+      transactions: months.map((month) => settlementMove(`pago-${month}`, `${month}-06`, 200_000, CHECKING, 'paid', `st-${month}`)),
+      rules: [pabloRule],
+      household: {
+        memberId: PABLO,
+        members: MEMBERS,
+        expenses: months.map((month) =>
+          sharedExpense(`renta-${month}`, `${month}-05`, 400_000, DIEGO, undefined, { categoryId: cat('arriendo') }),
+        ),
+        settlements: months.map((month) => settlement(`st-${month}`, `${month}-06`, PABLO, DIEGO, 200_000)),
+      },
+      sharedCoverage: months.map((month) => ({
+        ref: { ruleId: pabloRule.id, dueDate: d(`${month}-05`) },
+        sharedExpenseId: toId(`renta-${month}`),
+      })),
+      today: d('2026-11-01'),
+    })
+
+    const projection = projectFinances(input, d('2027-01-31'), SCENARIOS.central)
+    // Three rents to come (November, December, January) and nothing else: the past rents are not «everyday spending».
+    expect(projection.breakdown).toMatchObject({ startBalance: 2_200_000, confirmedOut: 600_000, variableSpend: 0 })
+    expect(projection.endProjected).toBe(1_600_000)
   })
 
   it('entrega los tres escenarios para el mismo horizonte', () => {

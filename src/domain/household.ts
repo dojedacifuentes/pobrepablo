@@ -85,6 +85,12 @@ export function householdBalances(
     invariant(current !== undefined, `No es miembro del hogar: ${member}`)
     balances.set(member, add(current, delta))
   }
+  // The same event listed twice would be counted twice: a merged package must never do that.
+  invariant(new Set(expenses.map((expense) => expense.id)).size === expenses.length, 'Hay un gasto compartido repetido')
+  invariant(
+    new Set(settlements.map((settlement) => settlement.id)).size === settlements.length,
+    'Hay un reembolso repetido',
+  )
 
   for (const expense of expenses) {
     if (!counts(expense, asOf)) {

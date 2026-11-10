@@ -87,13 +87,16 @@ const MAX_DIGITS = 15
  * would turn 1.500 pesos and fifty cents into 150.050 pesos.
  */
 export function parseCLP(text: string): Money | null {
-  const compact = text.replace(/[\s$]/g, '').replace(MINUS_SIGN, '-')
-  if (!/^-?(\d{1,3}(\.\d{3})+|\d+)$/.test(compact)) {
+  // Optional minus, optional peso sign, then plain digits or well-formed groups of thousands.
+  // Spaces are allowed only around the signs, never between digits: «1 5» is not fifteen.
+  const match = /^([-−])?\s*\$?\s*([1-9]\d{0,2}(?:\.\d{3})+|\d+)$/.exec(text.trim())
+  if (match === null) {
     return null
   }
-  const digits = compact.replaceAll('.', '')
-  if (digits.replace('-', '').length > MAX_DIGITS) {
+  const digits = (match[2] ?? '').replaceAll('.', '')
+  if (digits.length === 0 || digits.length > MAX_DIGITS) {
     return null
   }
-  return money(Number(digits))
+  const value = Number(digits)
+  return money(match[1] === undefined ? value : 0 - value)
 }

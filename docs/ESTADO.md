@@ -4,10 +4,11 @@
 
 ## Dónde estamos
 
-**Fase 2 (dominio financiero) en cierre.** El código y sus pruebas están escritos y en verde. Falta la segunda pasada
-del revisor independiente y poner al día `docs/07-modelo-financiero.md` con las correcciones.
+**Fase 2 (dominio financiero) terminada.** Sigue la **fase 3 · Datos locales**.
 
-Repositorio: `github.com/dojedacifuentes/pobrepablo`, **público** por decisión del propietario (ADR 0008).
+- Repositorio: `github.com/dojedacifuentes/pobrepablo`, **público** por decisión del propietario (ADR 0008).
+- Vercel: el proyecto quedó preparado para importarse, pero **no está publicado**. Al pulsar «Deploy», Vercel pidió
+  verificar la identidad con un código enviado al correo del propietario; ese paso lo hace él.
 
 ## Hecho
 
@@ -15,33 +16,32 @@ Repositorio: `github.com/dojedacifuentes/pobrepablo`, **público** por decisión
 - **Fase 2:**
   - Proyecto inicializado con las versiones del ADR 0006. `npm run verify` y `npm run e2e` existen.
   - `src/domain/`: dinero, fechas, reparto, cuentas, movimientos, saldos, reportes, tarjeta, recurrentes, presupuestos,
-    metas, Hogar (y la coherencia de sus registros pareados), obligaciones, magnitudes, proyección y pronóstico.
-  - 195 pruebas (unitarias y de propiedades) en verde, también con 4.000 casos aleatorios por propiedad.
-  - Comprobación de mutaciones: se rompió el dominio en 39 puntos y las pruebas detectaron los 39.
-  - Revisión independiente del `revisor-financiero`: 16 hallazgos, todos corregidos en el código y con pruebas.
+    metas, Hogar (con la coherencia de sus registros pareados y la cobertura de gastos programados), obligaciones,
+    magnitudes, proyección y pronóstico. Cómo calcula cada cifra: `docs/07-modelo-financiero.md`.
+  - **210 pruebas** unitarias y de propiedades en verde, también con 2.000 a 4.000 casos aleatorios por propiedad.
+  - **Comprobación de mutaciones:** se rompió el dominio a propósito en 53 puntos, uno a la vez, y las pruebas
+    detectaron los 53.
+  - **Revisión independiente**, dos pasadas del `revisor-financiero`:
+    - Primera: 16 hallazgos (ninguno de aritmética). Corregidos.
+    - Segunda: ninguno crítico; 3 importantes y 6 menores, nacidos de las correcciones. Corregidos los 3 importantes y
+      los menores que tenían corrección; el resto quedó documentado como decisión (ver abajo).
   - `vercel.json` listo (sitio estático con rewrite a `index.html`).
 
-## Qué corrigió la revisión (resumen)
+## Qué sigue: fase 3 · Datos locales
 
-1. Un movimiento no puede tener fecha futura; uno que la tenga no esconde la obligación que dice pagar.
-2. Lo comprado con tarjeta baja lo disponible de inmediato, igual que con débito; la tarjeta admite día de facturación.
-3. Un gasto compartido que además es recurrente ya no se cuenta dos veces.
-4. Los dos lados de un registro del Hogar se crean y anulan juntos, y hay una revisión que detecta pares descuadrados.
-5. No se puede confirmar dos veces la misma ocurrencia.
-6. No se arrastran obligaciones anteriores al saldo inicial de una cuenta.
-7. Cambiar el calendario de una regla conserva lo ya confirmado.
-8. El lector de montos rechaza «1500.50» en vez de leerlo como 150.050.
-9. Convertir una reserva de meta en transferencia no cuenta el ahorro dos veces.
-10. La proyección descuenta el gasto con tarjeta cuando se paga la tarjeta, no el día de la compra.
+Ver `docs/PLAN.md`. Tareas que la revisión dejó expresamente para esta fase:
 
-## Qué sigue
+1. **Índice único por (regla, fecha)** en los movimientos que confirman una ocurrencia, para que dos confirmaciones
+   simultáneas no pasen. El dominio ya rechaza la segunda cuando ve la primera.
+2. **Los dos lados de un registro del Hogar en la misma transacción**, y ejecutar `householdLedgerIssues` (con la fecha
+   en que la persona empezó a registrar) antes de guardar y después de importar un paquete.
+3. **Solo ofrecer `rescheduleRule`** para cambiar el calendario de una regla; nunca editar su fecha de inicio.
+4. **Pasar siempre las categorías** a `validateTransaction`.
+5. Repetir la prueba «recalcular = incremental» contra los saldos guardados, y la de «importar dos veces».
+6. Al confirmar un recurrente como pago de gasto compartido, registrar el gasto compartido en la misma operación.
 
-1. Segunda pasada del revisor sobre las correcciones. La fase 2 se cierra sin hallazgos abiertos.
-2. Actualizar `docs/07-modelo-financiero.md`.
-3. **Fase 3 · Datos locales** (`docs/PLAN.md`). Tareas que la revisión dejó para esa fase:
-   - Índice único por (regla, fecha) para que dos confirmaciones simultáneas no pasen.
-   - Guardar los dos lados de un registro del Hogar en la misma transacción y ejecutar `householdLedgerIssues`.
-   - Repetir la prueba «recalcular = incremental» contra los saldos guardados.
+Para la interfaz (fases 5 y 7): preguntar «¿es el mismo gasto?» con `coverageCandidates`; ofrecer la conversión de una
+reserva en transferencia (`fulfilReservation`); permitir saltarse en bloque los vencidos antiguos.
 
 ## Lo que no está verificado
 
@@ -49,6 +49,10 @@ Repositorio: `github.com/dojedacifuentes/pobrepablo`, **público** por decisión
 - En un iPhone: el traspaso de datos de Safari a la app instalada y el comportamiento de `persist()` (ADR 0007).
 - El despliegue en Vercel: la configuración está escrita, pero no se ha desplegado.
 - La app todavía no tiene pantallas: solo un aviso de «en construcción».
+- Las correcciones de la segunda pasada no las revisó un tercero: las cubren las pruebas y las mutaciones, pero no
+  hubo tercera pasada del revisor.
+- Los generadores aleatorios no enlazan pagos compartidos con los eventos del hogar dentro de una situación completa
+  (se prueba aparte).
 
 ## Decisiones para revisar con el propietario
 
@@ -57,6 +61,10 @@ Repositorio: `github.com/dojedacifuentes/pobrepablo`, **público** por decisión
 - **Los vencidos no caducan.** Un recurrente que nunca se confirmó sigue contando como deuda hasta confirmarlo o
   saltárselo. Pausar una regla oculta también sus vencidos.
 - **El peso sobrante de un reparto empatado** le toca siempre a la misma persona (lo fija la especificación).
+- **Un arriendo compartido y además programado** aparece dos veces en el teléfono de quien no pagó hasta que confirma
+  «es el mismo gasto». El dominio no lo adivina solo.
+- **Subir cada fase a GitHub al cerrarla:** se hizo con la fase 2 porque el propietario lo pidió; para las siguientes
+  falta su indicación.
 
 ## Problemas conocidos y bloqueos
 

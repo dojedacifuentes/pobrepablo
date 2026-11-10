@@ -124,6 +124,14 @@ describe('estados de un movimiento programado', () => {
     expect(find(covered, 'arriendo', '2026-11-05')).toMatchObject({ status: 'confirmed', sharedExpenseId: 's1' })
     expect(find(covered, 'arriendo', '2026-11-05').transactionId).toBeUndefined()
     expect(find(covered, 'arriendo', '2026-10-05').status).toBe('overdue')
+
+    // Only an expense can be covered: an expected income does not vanish because of a shared expense.
+    const salary = rule('sueldo', '2026-11-25', 1_000_000, { kind: 'income', categoryId: cat('sueldo') })
+    const income = list({
+      rules: [salary],
+      coveredByShared: [{ ref: { ruleId: salary.id, dueDate: d('2026-11-25') }, sharedExpenseId: toId('s1') }],
+    })
+    expect(find(income, 'sueldo', '2026-11-25').status).toBe('pending')
   })
 })
 
@@ -193,6 +201,13 @@ describe('confirmar un movimiento programado', () => {
     ).toMatchObject({ installments: { count: 3, firstDueDate: '2026-12-05', dueDay: 5 } })
   })
 
+  it('las cuotas solo existen para un gasto con tarjeta', () => {
+    const rent = find(list({ rules: [rule('arriendo', '2026-11-05', 400_000)] }), 'arriendo', '2026-11-05')
+    expect(() =>
+      confirmOccurrence(rent, { id: toId('tx'), date: d('2026-11-05'), installments: 3 }, context()),
+    ).toThrow(DomainError)
+  })
+
   it('un gasto pagado por el hogar se confirma como pago de gasto compartido', () => {
     const rent = rule('arriendo', '2026-11-05', 400_000)
     const due = find(list({ rules: [rent] }), 'arriendo', '2026-11-05')
@@ -260,6 +275,30 @@ describe('cambiar el calendario de una regla', () => {
     // Four payments are stored, yet not one occurrence recognises them.
     expect(occurrences.some((item) => item.status === 'confirmed')).toBe(false)
     expect(occurrences.filter((item) => item.status === 'overdue')).toHaveLength(3)
+  })
+
+  it('cerrar una regla nunca la alarga', () => {
+    const ended = { ...rent, endDate: d('2026-09-30') }
+    const { closed, next } = rescheduleRule(ended, d('2026-11-10'), { id: toId('arriendo-2'), startDate: d('2026-12-10') })
+    expect(closed.endDate).toBe('2026-09-30')
+    // The new rule does not inherit an end that is already behind its start...
+    expect(next.endDate).toBeUndefined()
+    // ...but keeps one that is still ahead.
+    const lasting = { ...rent, endDate: d('2027-06-30') }
+    expect(rescheduleRule(lasting, d('2026-11-10'), { id: toId('arriendo-2'), startDate: d('2026-12-10') }).next.endDate).toBe(
+      '2027-06-30',
+    )
+  })
+
+  it('no corta la regla antes de un pago que ya se hizo por adelantado', () => {
+    const december = expense('adelantado', '2026-11-10', 400_000, CHECKING, {
+      categoryId: cat('arriendo'),
+      occurrence: { ruleId: rent.id, dueDate: d('2026-12-05') },
+    })
+    const next = { id: toId<'rule'>('arriendo-2'), startDate: d('2026-12-10') }
+    expect(() => rescheduleRule(rent, d('2026-11-20'), next, [...paid, december])).toThrow(DomainError)
+    expect(() => rescheduleRule(rent, d('2026-12-05'), next, [...paid, december])).not.toThrow()
+    expect(() => rescheduleRule(rent, d('2026-11-20'), next, [...paid, { ...december, voided: true }])).not.toThrow()
   })
 
   it('rechaza cambios que se pisan con el pasado', () => {

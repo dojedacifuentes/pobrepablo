@@ -49,12 +49,35 @@ describe('gasto cotidiano histórico', () => {
     })
   })
 
-  it('resume cada forma de pago por separado: el mes más barato, la mediana y el más caro', () => {
-    const history = summarizeVariableSpend([spend(300_000), spend(900_000, 100_000), spend(310_000, 50_000)])
+  it('toma el mes más barato, la mediana y el más caro por su total, y los reparte por forma de pago', () => {
+    // Totals 300.000, 600.000 and 900.000; two thirds by debit and one third with the card.
+    const history = summarizeVariableSpend([spend(200_000, 100_000), spend(600_000, 300_000), spend(400_000, 200_000)])
     expect(history).toMatchObject({ monthsAvailable: 3, sufficient: true })
-    expect(history.lowest).toEqual(spend(300_000, 0))
-    expect(history.median).toEqual(spend(310_000, 50_000))
-    expect(history.highest).toEqual(spend(900_000, 100_000))
+    expect(history.lowest).toEqual(spend(200_000, 100_000))
+    expect(history.median).toEqual(spend(400_000, 200_000))
+    expect(history.highest).toEqual(spend(600_000, 300_000))
+  })
+
+  it('no se confunde cuando la forma de pago cambia de un mes a otro', () => {
+    // 300.000 every month, paid one month by debit, one with a card and one with another card.
+    const other: AccountId = toId('otra-tarjeta')
+    const months: VariableSpend[] = [
+      spend(300_000),
+      { liquid: ZERO, byCard: new Map([[CARD, clp(300_000)]]) },
+      { liquid: ZERO, byCard: new Map([[other, clp(300_000)]]) },
+    ]
+    const history = summarizeVariableSpend(months)
+    const expected: VariableSpend = {
+      liquid: clp(100_000),
+      byCard: new Map([
+        [CARD, clp(100_000)],
+        [other, clp(100_000)],
+      ]),
+    }
+    // The person spends 300.000 a month in every scenario: none of them says zero or 900.000.
+    expect(history.lowest).toEqual(expected)
+    expect(history.median).toEqual(expected)
+    expect(history.highest).toEqual(expected)
   })
 
   it('la mediana resiste un mes atípico y, con un número par de meses, promedia los dos del medio', () => {
@@ -81,9 +104,12 @@ describe('gasto cotidiano histórico', () => {
       { ...expense('e6', '2026-10-12', 77_000), voided: true },
     ]
     const shares = [{ sharedExpenseId: toId<'sharedExpense'>('s1'), date: d('2026-10-15'), categoryId: cat('supermercado'), amount: clp(10_000) }]
-    expect(variableSpendByMonth(history, shares, [yearMonth('2026-09'), yearMonth('2026-10')], accounts)).toEqual([
+    const months = [yearMonth('2026-09'), yearMonth('2026-10')]
+    expect(variableSpendByMonth(history, shares, months, accounts)).toEqual([spend(20_000), spend(55_000, 30_000)])
+    // The part of a shared expense that belongs to a recurring rule is not everyday spending.
+    expect(variableSpendByMonth(history, shares, months, accounts, new Set(['s1']))).toEqual([
       spend(20_000),
-      spend(55_000, 30_000),
+      spend(45_000, 30_000),
     ])
   })
 })

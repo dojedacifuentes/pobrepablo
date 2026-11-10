@@ -112,6 +112,12 @@ describe('gastos compartidos del hogar', () => {
     expect(reconcile([trip, taxi], payments).every((obligation) => obligation.status === 'settled')).toBe(true)
   })
 
+  it('un mismo gasto o reembolso listado dos veces se rechaza en vez de contarse doble', () => {
+    expect(() => householdBalances(MEMBERS, [groceries, groceries], [])).toThrow(DomainError)
+    const repaid = settlement('st', '2026-11-10', PABLO, DIEGO, 100_000)
+    expect(() => householdBalances(MEMBERS, [groceries], [repaid, repaid])).toThrow(DomainError)
+  })
+
   it('rechaza datos que no cuadran con el hogar', () => {
     expect(() => {
       validateSharedExpense(sharedExpense('x', '2026-11-09', 0, DIEGO), MEMBERS)

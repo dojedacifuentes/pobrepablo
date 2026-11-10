@@ -1,12 +1,15 @@
+import type { LocalDate } from './dates'
 import { invariant } from './errors'
 import type { Settlement, SharedExpense } from './household'
 import type { AccountId, MemberId, SettlementId, SharedExpenseId, TransactionId } from './ids'
-import type {
-  InstallmentPlan,
-  OccurrenceRef,
-  SettlementMovement,
-  SharedPayment,
-  Transaction,
+import {
+  type InstallmentPlan,
+  type OccurrenceRef,
+  type SettlementMovement,
+  type SharedPayment,
+  type Transaction,
+  type ValidationContext,
+  validateTransaction,
 } from './transactions'
 
 /**
@@ -37,26 +40,29 @@ export function recordSharedExpense(
   expense: SharedExpense,
   me: MemberId,
   payment?: PaymentDetails,
+  /** When given, the cash movement is validated like any other (date, account, instalments). */
+  context?: ValidationContext,
 ): { readonly expense: SharedExpense; readonly payment: SharedPayment | null } {
   if (expense.payerId !== me) {
     invariant(payment === undefined, 'Solo quien pagó registra la salida de dinero de su cuenta')
     return { expense, payment: null }
   }
   invariant(payment !== undefined, 'Quien pagó debe indicar de qué cuenta salió el dinero')
-  return {
-    expense,
-    payment: {
-      kind: 'shared_payment',
-      id: payment.id,
-      date: expense.date,
-      amount: expense.total,
-      accountId: payment.accountId,
-      sharedExpenseId: expense.id,
-      voided: false,
-      ...(payment.installments !== undefined ? { installments: payment.installments } : {}),
-      ...(payment.occurrence !== undefined ? { occurrence: payment.occurrence } : {}),
-    },
+  const movement: SharedPayment = {
+    kind: 'shared_payment',
+    id: payment.id,
+    date: expense.date,
+    amount: expense.total,
+    accountId: payment.accountId,
+    sharedExpenseId: expense.id,
+    voided: false,
+    ...(payment.installments !== undefined ? { installments: payment.installments } : {}),
+    ...(payment.occurrence !== undefined ? { occurrence: payment.occurrence } : {}),
   }
+  if (context !== undefined) {
+    validateTransaction(movement, context)
+  }
+  return { expense, payment: movement }
 }
 
 /** Voids a shared expense together with the cash movement that paid it. Returns only what changed. */
@@ -154,7 +160,13 @@ export function householdLedgerIssues(
   transactions: readonly Transaction[],
   expenses: readonly SharedExpense[],
   settlements: readonly Settlement[],
+  /**
+   * The day `me` started registering. Household events older than that have no cash movement on
+   * this phone and none is expected: the opening balances already include them.
+   */
+  since?: LocalDate,
 ): LedgerIssue[] {
+  const expected = (date: LocalDate): boolean => since === undefined || date >= since
   const issues: LedgerIssue[] = []
   const liveExpenses = new Map(expenses.filter((expense) => !expense.voided).map((expense) => [expense.id, expense]))
   const liveSettlements = new Map(
@@ -205,13 +217,13 @@ export function householdLedgerIssues(
   }
 
   for (const expense of liveExpenses.values()) {
-    if (expense.payerId === me && !paidExpenses.has(expense.id)) {
+    if (expense.payerId === me && !paidExpenses.has(expense.id) && expected(expense.date)) {
       issues.push({ kind: 'expense_without_payment', sharedExpenseId: expense.id })
     }
   }
   for (const settlement of liveSettlements.values()) {
     const involved = settlement.fromMemberId === me || settlement.toMemberId === me
-    if (involved && !movedSettlements.has(settlement.id)) {
+    if (involved && !movedSettlements.has(settlement.id) && expected(settlement.date)) {
       issues.push({ kind: 'settlement_without_movement', settlementId: settlement.id })
     }
   }

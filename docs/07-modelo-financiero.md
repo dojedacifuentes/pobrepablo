@@ -78,9 +78,9 @@ lectura prudente.
 
 ### Qué es una obligación pendiente
 
-1. **Gastos programados** que siguen esperando (pendientes, estimados o vencidos):
-   - Desde una cuenta líquida: los que vencen hasta fin de mes.
-   - Con cargo a una tarjeta: los que entran en una cuenta de la tarjeta dentro de su horizonte (ver abajo).
+1. **Gastos programados** que siguen esperando (pendientes, estimados o vencidos) y ocurren hasta fin de mes:
+   - Desde una cuenta líquida o con cargo a una tarjeta: cuentan igual, desde el primer día. El cargo a la tarjeta
+     sale de la cuenta más tarde, con la cuenta de la tarjeta, pero la plata ya está comprometida.
    - Desde una cuenta de ahorro: no cuentan, porque no tocan el saldo para gastar.
 2. **Cuotas de tarjeta** sin pagar dentro del horizonte de la tarjeta, incluidas las atrasadas.
 3. **Lo que se debe al hogar**, si el saldo interno es negativo.
@@ -122,15 +122,23 @@ regla del día 31 cae el 28 o 29 de febrero y vuelve al 31 en marzo.
 | Confirmado | Un movimiento real, fechado hoy o antes, tomó su lugar; o lo cubrió un gasto compartido. |
 | Cancelado | La persona decidió saltárselo. |
 
-- **Confirmar** crea un movimiento que recuerda qué ocurrencia confirma: deja de ser obligación y pasa a ser gasto, de
-  modo que **lo disponible no cambia**. Un cargo a la tarjeta nace con su cuota en la cuenta que lo incluye.
+- **Confirmar** crea un movimiento que recuerda qué ocurrencia confirma: deja de ser obligación y pasa a ser gasto.
+  Confirmado en un solo pago y por el monto programado, **lo disponible no cambia**. Un cargo a la tarjeta nace con
+  su cuota en la cuenta que lo incluye. Cambia, y es correcto que cambie, en tres casos: si el monto real es otro; si
+  se confirma en varias cuotas (solo pesa la próxima cuota); y si se paga hoy un atrasado de otro mes en una categoría
+  con presupuesto con fondo (ese pago consume el presupuesto de este mes; registrado con su fecha original, no).
+- Las cuotas solo existen para un gasto con cargo a una tarjeta: pedirlas en otra cuenta se rechaza.
 - **No se puede confirmar dos veces.** La segunda confirmación se rechaza aunque la pantalla siga mostrando la
   ocurrencia vieja. (En la fase 3 se suma un índice único en la base, para el caso de dos escrituras simultáneas.)
 - **No se confirma con fecha futura.** Pagar por adelantado se registra con la fecha de hoy.
 - Si se anula el movimiento, la ocurrencia vuelve a quedar pendiente.
 - **El calendario de una regla no se edita en el lugar**, porque sus ocurrencias se identifican por fecha y los pagos
   ya confirmados quedarían huérfanos. Para cambiarlo, `rescheduleRule` cierra la regla y crea otra desde la fecha
-  nueva: el pasado queda intacto.
+  nueva. No alarga una regla que ya había terminado, y no deja cortar antes de un pago que ya se hizo por adelantado.
+  (El dominio no puede impedir que alguien edite la fecha de inicio directamente: la capa de datos de la fase 3 solo
+  ofrecerá `rescheduleRule`.)
+- Si existe un movimiento guardado con fecha futura que apunta a una ocurrencia, esta sigue pendiente y no se puede
+  confirmar de nuevo hasta anular ese movimiento.
 - Una regla pausada no muestra nada pendiente ni vencido; lo confirmado sigue en el historial.
 
 ## Presupuestos
@@ -139,9 +147,13 @@ Por categoría y por mes: planificado, usado, disponible, porcentaje y ritmo de 
 Estados: bien, cerca del límite (90 % o más) y excedido.
 
 Un presupuesto **con fondo** aparta lo que todavía no se gasta: reservado = planificado − gastado − lo programado de
-esa categoría que cae en el mes y sigue esperando (nunca menos que cero). Esa resta evita contar dos veces un
-arriendo que ya está programado. Un gasto atrasado de un mes anterior no le quita reserva al presupuesto de este mes.
-Un presupuesto sin fondo es solo una referencia.
+esa categoría en el mes que **ya cuenta como obligación** (nunca menos que cero). Se calcula desde las mismas
+obligaciones, así que nada queda contado dos veces ni sin contar: lo que es obligación sale de la reserva y lo que no
+lo es (un gasto programado desde la cuenta de ahorro) sigue dentro. Un gasto atrasado de un mes anterior no le quita
+reserva al presupuesto de este mes. Un presupuesto sin fondo es solo una referencia.
+
+El presupuesto mide el **gasto propio**. En un gasto compartido cuenta la parte de cada uno, no lo que pagó por el
+hogar: quien paga un arriendo de $400.000 a medias gasta $200.000 de su presupuesto de arriendo.
 
 ## Metas de ahorro
 
@@ -153,8 +165,10 @@ Dos formas de ahorrar, que el modelo no confunde:
 Acumulado de la meta = reservado + transferido. Ninguna de las dos es gasto.
 
 - **Convertir una reserva en transferencia** se hace en un solo paso (`fulfilReservation`): se libera la reserva y se
-  crea la transferencia juntas. Hacer solo la transferencia contaría el mismo ahorro dos veces.
-- La reserva se sigue en orden de fechas y nunca baja de cero.
+  crea la transferencia juntas. Reservar y además transferir por separado suma las dos cosas: es correcto si son dos
+  ahorros distintos, y cuenta doble si era la misma plata; por eso la interfaz ofrecerá la conversión.
+- La reserva se sigue día a día y nunca baja de cero. Dentro de un mismo día, lo reservado cuenta antes que lo
+  liberado, sin depender de los identificadores.
 - **Archivar una meta libera lo que tenía reservado.**
 - El aporte mensual sugerido es lo que falta dividido por los meses que quedan, redondeado hacia arriba.
 
@@ -183,10 +197,15 @@ lo que debe es una obligación pendiente.
 ### Registros que viajan juntos
 
 Un gasto compartido y la salida de dinero de quien lo pagó son dos registros, y también un reembolso y su movimiento.
-Crear o anular un lado sin el otro haría aparecer o desaparecer plata. Por eso `household-ledger.ts` siempre produce
-los dos lados (`recordSharedExpense`, `voidSharedExpense`, `recordSettlement`, `voidSettlement`) y
-`householdLedgerIssues` lista cualquier par que se haya descuadrado: es lo que se le mostrará a la persona si un
-paquete importado trae una contradicción.
+Crear o anular un lado sin el otro haría aparecer o desaparecer plata. Por eso `household-ledger.ts` produce los dos
+lados (`recordSharedExpense`, `voidSharedExpense`, `recordSettlement`, `voidSettlement`) y `householdLedgerIssues`
+lista cualquier par que se haya descuadrado: es lo que se le mostrará a la persona si un paquete importado trae una
+contradicción.
+
+- La única excepción es confirmar un recurrente como pago de gasto compartido: `confirmOccurrence` crea solo la
+  salida de dinero, y el gasto compartido se registra en la misma operación. Si faltara, la revisión lo detecta.
+- Lo anterior al día en que la persona empezó a registrar no exige movimiento: su saldo inicial ya lo incluye.
+- Un mismo gasto o reembolso listado dos veces se rechaza, en vez de contarse doble.
 
 ### Un gasto compartido que además es recurrente (el arriendo)
 
@@ -195,7 +214,13 @@ paquete importado trae una contradicción.
 - **Quien no paga** marca que el gasto compartido cubre su ocurrencia programada. Deja de ser obligación; lo que debe
   ahora es la deuda con el hogar. Si ese gasto compartido se anula, la ocurrencia vuelve a estar pendiente.
 
-Así el mismo arriendo no se cuenta dos veces en ninguno de los dos teléfonos.
+Una cobertura solo vale si tiene sentido: la regla es un gasto, el gasto compartido existe, es de la misma categoría,
+lo pagó otra persona y quien cubre participa en él. Si no, se ignora y el gasto programado sigue pendiente.
+
+**Mientras la cobertura no esté marcada, el arriendo sí aparece dos veces** en el teléfono de quien no pagó (como
+programado y como deuda con el hogar). El dominio no lo adivina: `coverageCandidates` detecta el caso (misma
+categoría, mismo mes, pagado por otro) para que la app pregunte «¿es el mismo gasto?». En la proyección, las partes
+de un gasto compartido ligado a una regla no entran en el gasto cotidiano: la regla ya las proyecta.
 
 ## Proyección
 
@@ -214,10 +239,14 @@ toca los movimientos reales.
 | Optimista | Se cuentan | El mes más barato |
 
 El **gasto cotidiano** es el que no viene de un recurrente. Se estima con los meses completos del historial (hasta
-seis), sin contar el mes en que se empezó a registrar, y **por forma de pago**:
+seis), contados desde el **primer movimiento registrado** (no desde la apertura de la cuenta) y sin el mes en que se
+empezó.
 
-- lo pagado con débito o efectivo sale de la cuenta ese mismo día;
-- lo pagado con tarjeta sale cuando se paga la cuenta de la tarjeta. Las compras ya hechas no se estiman: sus cuotas
+- Los tres escenarios usan totales reales de la persona: su mes más barato, la mediana y su mes más caro.
+- Cada total se reparte **por forma de pago** en la proporción de todo el historial, porque cómo se paga cambia de un
+  mes a otro. El reparto redondea hacia abajo: puede quedar unos pesos bajo el total.
+- Lo pagado con débito o efectivo sale de la cuenta ese mismo día.
+- Lo pagado con tarjeta sale cuando se paga la cuenta de la tarjeta. Las compras ya hechas no se estiman: sus cuotas
   son obligaciones conocidas.
 
 **Con menos de tres meses completos no se estima**: se proyecta solo con compromisos y la proyección lo declara.
@@ -249,13 +278,22 @@ Puntos donde la especificación admite más de una lectura y el modelo eligió u
 11. **La mediana de un número par de meses** promedia los dos del medio y redondea hacia abajo.
 12. **Un pago programado de la tarjeta desde una cuenta de ahorro** no se modela: la cuota se proyecta saliendo del
     saldo líquido.
+13. **Pausar una regla oculta también sus vencidos.** Para dejar de pagar algo conservando lo atrasado, se cierra la
+    regla con fecha de término en vez de pausarla.
+14. **La tarjeta tiene un salto por ciclo, y es real:** al pasar el cierre o el día de pago entra en el horizonte la
+    cuota siguiente de una compra en cuotas, y lo disponible baja ese día.
+15. **La categoría de un movimiento se valida** cuando la capa de datos entrega la lista de categorías (siempre, desde
+    la fase 3); las funciones puras aceptan no recibirla para poder probarse aisladas.
 
 ## Invariantes y dónde se prueban
 
 Con fast-check, 200 casos aleatorios por propiedad (`NEXO_PROPERTY_RUNS=4000` para una búsqueda profunda). Las
 situaciones aleatorias incluyen cuentas abiertas en distintas fechas, tarjetas con y sin día de facturación y días de
-pago 29 a 31, movimientos fechados antes y después de «hoy», ocurrencias confirmadas y saltadas, metas archivadas y
-hogares de dos a cinco personas.
+pago 29 a 31, movimientos fechados antes y después de «hoy», ocurrencias confirmadas y saltadas y metas archivadas.
+Las situaciones completas tienen un hogar de dos personas; las reglas del hogar se prueban además con tres a cinco.
+
+Lo que los generadores aún no cubren: pagos compartidos y reembolsos enlazados con los eventos del hogar dentro de
+una situación completa (se prueban aparte, en `household-ledger.test.ts`).
 
 | Invariante (especificación §4.3) | Prueba |
 |---|---|
@@ -268,12 +306,19 @@ hogares de dos a cinco personas.
 | Importar dos veces el mismo respaldo o paquete deja la base idéntica | **Pendiente**: fases 3 y 7, donde existe la importación |
 
 Además: lo disponible siempre es saldo líquido − obligaciones − reservas; el patrimonio neto es la suma de todos los
-saldos más el saldo interno; confirmar un gasto programado no cambia lo disponible; pagar con tarjeta nunca deja más
-disponible que pagar lo mismo con débito; pagar lo sugerido en el hogar deja todo saldado; el saldo final de una
-proyección es la suma de su desglose.
+saldos más el saldo interno; confirmar en un pago un gasto programado no cambia lo disponible; con tarjeta en un pago
+queda lo mismo disponible que con débito, y en cuotas solo pesa la próxima cuota; marcar una cobertura quita
+exactamente esa obligación; pagar lo sugerido en el hogar deja todo saldado; el saldo final de una proyección es la
+suma de su desglose.
 
-**Comprobación de mutaciones (10-nov-2026):** se rompió el dominio a propósito en 39 puntos, uno a la vez, y las
-pruebas detectaron los 39.
+**Comprobación de mutaciones:** el dominio se rompe a propósito, un punto a la vez, y las pruebas deben detectar
+cada rotura. El resultado de la última pasada está en `docs/ESTADO.md`.
 
-**Revisión independiente (10-nov-2026):** el subagente `revisor-financiero` encontró 16 hallazgos, ninguno de
-aritmética. Todos quedaron corregidos en el código y cubiertos por pruebas.
+**Revisión independiente (10-nov-2026):** dos pasadas del subagente `revisor-financiero`.
+
+- Primera: 16 hallazgos, ninguno de aritmética.
+- Segunda: ninguno crítico; tres importantes introducidos por las correcciones (un cargo programado a la tarjeta
+  que quedaba unos días sin contar, la proyección que descontaba dos veces un arriendo compartido y programado, y
+  reservar y liberar el mismo día según el identificador) y seis menores.
+- Los importantes y los menores con corrección posible están corregidos y con pruebas. Lo que quedó como decisión o
+  como tarea de otra fase está en «Decisiones de interpretación» y en `docs/ESTADO.md`.

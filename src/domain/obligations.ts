@@ -20,6 +20,8 @@ export interface Obligation {
   readonly amount: Money
   readonly certainty: Certainty
   readonly categoryId?: CategoryId
+  /** Programmed expenses only: the day the expense itself happens (its occurrence date). */
+  readonly incurredOn?: LocalDate
 }
 
 export interface ObligationsInput {
@@ -36,10 +38,11 @@ export interface ObligationsInput {
 /**
  * Magnitude 3: the pending obligations of the period.
  *
- * 1. Programmed expenses that are still waiting (pending, estimated or overdue). Paid from a
- *    spendable account, they count when they fall due on or before the end of the period.
- *    Charged to a credit card, they count when the bill that will include them is inside the
- *    card's horizon. Paid from a savings account, they never touch spendable balance.
+ * 1. Programmed expenses that are still waiting (pending, estimated or overdue) and happen on or
+ *    before the end of the period, whether they are paid by debit or charged to a credit card.
+ *    A card charge counts from the start, exactly like a debit one: the money is committed even
+ *    though it leaves the account later, on the card's bill. Only expenses paid from a savings
+ *    account are left out: they never touch spendable balance.
  * 2. Credit-card instalments still unpaid inside the card's horizon: the end of the period or the
  *    bill that would include a purchase made today, whichever is later. So whatever was bought
  *    with the card up to today already counts, exactly as if it had been paid by debit.
@@ -52,34 +55,22 @@ export function pendingObligations(input: ObligationsInput): Obligation[] {
   const obligations: Obligation[] = []
 
   for (const occurrence of input.occurrences) {
-    if (occurrence.kind !== 'expense' || !isAwaiting(occurrence)) {
+    if (occurrence.kind !== 'expense' || !isAwaiting(occurrence) || occurrence.dueDate > input.through) {
       continue
     }
     const account = requireAccount(input.accounts, occurrence.accountId)
-    let cashDate: LocalDate
-    let limit: LocalDate
-    switch (accountClass(account.kind)) {
-      case 'liquid':
-        cashDate = occurrence.dueDate
-        limit = input.through
-        break
-      case 'liability':
-        cashDate = cardDueDate(account, occurrence.dueDate)
-        limit = cardObligationHorizon(account, input.today, input.through)
-        break
-      case 'savings':
-        continue
-    }
-    if (cashDate > limit) {
+    const accountKind = accountClass(account.kind)
+    if (accountKind === 'savings') {
       continue
     }
     obligations.push({
       source: 'scheduled',
       ref: `${occurrence.ruleId}@${occurrence.dueDate}`,
       label: occurrence.label,
-      dueDate: cashDate,
+      dueDate: accountKind === 'liability' ? cardDueDate(account, occurrence.dueDate) : occurrence.dueDate,
       amount: occurrence.amount,
       certainty: occurrence.amountIsEstimate ? 'estimated' : 'confirmed',
+      incurredOn: occurrence.dueDate,
       ...(occurrence.categoryId !== undefined ? { categoryId: occurrence.categoryId } : {}),
     })
   }
@@ -127,24 +118,26 @@ export function totalObligations(obligations: readonly Obligation[]): Money {
 }
 
 /**
- * Programmed expenses of each category that fall inside `period` and are still waiting, whatever
- * account they will be paid from. A funded budget does not reserve this part again: when the
- * expense is confirmed it will use the budget, so reserving it too would count it twice.
- * Expenses left over from earlier months belong to those months' budgets, not to this one.
+ * What is already counted as an obligation for programmed expenses of each category that happen
+ * inside `period`. A funded budget does not reserve this part again: it is the same money.
+ *
+ * It is built from the obligations themselves, so the two can never disagree: whatever is not an
+ * obligation stays inside the reserve, and whatever is one leaves it. Expenses left over from
+ * earlier months belong to those months' budgets, not to this one.
  */
-export function awaitingExpensesByCategory(
-  occurrences: readonly Occurrence[],
+export function scheduledObligationsByCategory(
+  obligations: readonly Obligation[],
   period: Period,
 ): ReadonlyMap<CategoryId, Money> {
   const byCategory = new Map<CategoryId, Money>()
-  for (const occurrence of occurrences) {
+  for (const obligation of obligations) {
     if (
-      occurrence.kind === 'expense' &&
-      occurrence.categoryId !== undefined &&
-      isAwaiting(occurrence) &&
-      isWithin(occurrence.dueDate, period)
+      obligation.source === 'scheduled' &&
+      obligation.categoryId !== undefined &&
+      obligation.incurredOn !== undefined &&
+      isWithin(obligation.incurredOn, period)
     ) {
-      byCategory.set(occurrence.categoryId, add(byCategory.get(occurrence.categoryId) ?? ZERO, occurrence.amount))
+      byCategory.set(obligation.categoryId, add(byCategory.get(obligation.categoryId) ?? ZERO, obligation.amount))
     }
   }
   return byCategory

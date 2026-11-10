@@ -2,6 +2,7 @@ import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { accountClass, requireAccount } from './accounts'
 import { accountBalance } from './balances'
+import { coverageCandidates } from './coverage'
 import { defaultInstallmentPlan } from './credit-card'
 import { toId } from './ids'
 import { type SnapshotInput, financialSnapshot } from './magnitudes'
@@ -190,7 +191,34 @@ describe('coherencia entre magnitudes', () => {
     )
   })
 
-  it('pagar con tarjeta nunca deja más disponible que pagar lo mismo con débito', () => {
+  it('marcar que un gasto compartido cubre un gasto programado quita exactamente esa obligación', () => {
+    fc.assert(
+      fc.property(arbSnapshotInput, (input) => {
+        const household = input.household
+        if (household === undefined) {
+          return
+        }
+        const before = financialSnapshot(input)
+        const [candidate] = coverageCandidates(before.occurrences, household.memberId, household.expenses, [], input.today)
+        fc.pre(candidate !== undefined)
+        if (candidate === undefined) {
+          return
+        }
+        const after = financialSnapshot({ ...input, sharedCoverage: [candidate] })
+        const covered = before.obligations.find(
+          (item) => item.source === 'scheduled' && item.ref === `${candidate.ref.ruleId}@${candidate.ref.dueDate}`,
+        )
+
+        expect(after.obligationsTotal).toBe(subtract(before.obligationsTotal, covered?.amount ?? ZERO))
+        // The debt with the household and the expense of the month were already there: they do not move.
+        expect(after.householdBalance).toBe(before.householdBalance)
+        expect(after.totals).toEqual(before.totals)
+        expect(after.netWorth).toEqual(before.netWorth)
+      }),
+    )
+  })
+
+  it('con tarjeta en un pago queda lo mismo disponible que con débito; en cuotas, solo pesa la próxima cuota', () => {
     fc.assert(
       fc.property(arbSnapshotInput, arbAmount(), fc.integer({ min: 1, max: 12 }), (input, amount, count) => {
         fc.pre(amount >= count)
@@ -206,7 +234,9 @@ describe('coherencia entre magnitudes', () => {
 
         // Debit: the money leaves at once.
         expect(debit.liquidBalance).toBe(subtract(before.liquidBalance, amount))
-        // Card: never better than debit by more than what is not yet billed or what card credit absorbs...
+        // Card: the account does not move, and what is left available is never less than with debit
+        // (later instalments are not owed yet, and money already paid into the card absorbs charges)...
+        expect(credit.liquidBalance).toBe(before.liquidBalance)
         expect(credit.available.available).toBeGreaterThanOrEqual(debit.available.available)
         // ...and with a single payment and no credit on the card, exactly the same as debit.
         const cardHadNoCredits = before.cardStatements.every(

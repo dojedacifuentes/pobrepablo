@@ -8,6 +8,7 @@ import {
   totalRegisteredBalance,
 } from './balances'
 import { type Budget, type BudgetStatus, budgetStatuses } from './budgets'
+import { validCoverage } from './coverage'
 import { type CardStatement, cardStatement } from './credit-card'
 import { type LocalDate, type Period, monthPeriod, yearMonthOf } from './dates'
 import { invariant } from './errors'
@@ -15,7 +16,12 @@ import { type Goal, type GoalProgress, type GoalReservation, goalProgress } from
 import { type Settlement, type SharedExpense, householdBalances, memberShares } from './household'
 import type { MemberId } from './ids'
 import { type Money, ZERO, add, atLeastZero, negate, subtract } from './money'
-import { type Obligation, awaitingExpensesByCategory, pendingObligations, totalObligations } from './obligations'
+import {
+  type Obligation,
+  pendingObligations,
+  scheduledObligationsByCategory,
+  totalObligations,
+} from './obligations'
 import { type Occurrence, type OccurrenceCoverage, type RecurringRule, listOccurrences } from './recurring'
 import { type HouseholdShareEntry, type PeriodTotals, periodTotals } from './reports'
 import type { OccurrenceRef, Transaction } from './transactions'
@@ -165,7 +171,7 @@ export function ledgerState(input: SnapshotInput, through: LocalDate): LedgerSta
   const household = input.household
   let householdBalance = ZERO
   let householdShares: HouseholdShareEntry[] = []
-  let liveShared = new Set<string>()
+  let coveredByShared: OccurrenceCoverage[] = []
   if (household !== undefined) {
     const mine = householdBalances(household.members, household.expenses, household.settlements, today).get(
       household.memberId,
@@ -173,8 +179,13 @@ export function ledgerState(input: SnapshotInput, through: LocalDate): LedgerSta
     invariant(mine !== undefined, `No es miembro del hogar: ${household.memberId}`)
     householdBalance = mine
     householdShares = memberShares(household.memberId, household.expenses, today)
-    liveShared = new Set(
-      household.expenses.filter((expense) => !expense.voided && expense.date <= today).map((expense) => expense.id),
+    // A coverage only holds while it makes sense: see `validCoverage`.
+    coveredByShared = validCoverage(
+      input.sharedCoverage ?? [],
+      input.rules,
+      household.memberId,
+      household.expenses,
+      today,
     )
   }
 
@@ -182,8 +193,7 @@ export function ledgerState(input: SnapshotInput, through: LocalDate): LedgerSta
     rules: input.rules,
     transactions: input.transactions,
     cancelled: input.cancelledOccurrences,
-    // A coverage only holds while the shared expense behind it is alive.
-    coveredByShared: (input.sharedCoverage ?? []).filter((coverage) => liveShared.has(coverage.sharedExpenseId)),
+    coveredByShared,
     accounts: accountIndex,
     today,
     through,
@@ -254,7 +264,7 @@ export function financialSnapshot(input: SnapshotInput): FinancialSnapshot {
     input.budgets,
     month,
     totals.expenseByCategory,
-    awaitingExpensesByCategory(state.occurrences, period),
+    scheduledObligationsByCategory(state.obligations, period),
     today,
   )
   // An archived goal no longer sets money apart: archiving it releases whatever it had reserved.

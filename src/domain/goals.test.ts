@@ -61,6 +61,38 @@ describe('metas de ahorro', () => {
     expect(reservedForGoal(trip.id, reservations.toReversed(), today)).toBe(40_000)
   })
 
+  it('reservar y liberar el mismo día da lo mismo sea cual sea el identificador de cada registro', () => {
+    for (const [reserveId, releaseId] of [
+      ['a', 'b'],
+      ['b', 'a'],
+    ] as const) {
+      const sameDay = [
+        reservation(releaseId, 'viaje', '2026-11-05', -30_000),
+        reservation(reserveId, 'viaje', '2026-11-05', 50_000),
+      ]
+      expect(reservedForGoal(trip.id, sameDay, today)).toBe(20_000)
+    }
+    // Converting a reserve into a transfer on the very day it was reserved.
+    const reserved = [reservation('zzz', 'viaje', '2026-11-10', 150_000)]
+    const { release, transfer: moved } = fulfilReservation({
+      goalId: trip.id,
+      amount: clp(150_000),
+      date: today,
+      reservationId: toId('aaa'),
+      transactionId: toId('t1'),
+      fromAccountId: CHECKING,
+      toAccountId: SAVINGS,
+      reservations: reserved,
+      accounts,
+      today,
+    })
+    expect(goalProgress(trip, [...reserved, release], [moved], accounts, today)).toMatchObject({
+      reserved: 0,
+      transferred: 150_000,
+      accumulated: 150_000,
+    })
+  })
+
   it('convertir una reserva en transferencia efectiva no cuenta el ahorro dos veces', () => {
     const reservations = [reservation('r1', 'viaje', '2026-11-02', 150_000)]
     const { release, transfer: moved } = fulfilReservation({

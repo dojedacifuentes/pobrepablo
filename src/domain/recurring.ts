@@ -174,7 +174,8 @@ export function listOccurrences(input: ListOccurrencesInput): Occurrence[] {
     for (const dueDate of occurrenceDates(rule, from, input.through)) {
       const key = refKey({ ruleId: rule.id, dueDate })
       const confirmation = confirmedBy.get(key)
-      const coverage = confirmation === undefined ? covered.get(key) : undefined
+      // Only an expense can be covered by a shared expense.
+      const coverage = confirmation === undefined && rule.kind === 'expense' ? covered.get(key) : undefined
 
       let status: OccurrenceStatus
       if (confirmation !== undefined || coverage !== undefined) {
@@ -273,6 +274,12 @@ export function confirmOccurrence(
     occurrence: ref,
   }
 
+  const account = requireAccount(context.accounts, occurrence.accountId)
+  invariant(
+    details.installments === undefined || (occurrence.kind === 'expense' && account.kind === 'credit_card'),
+    'Solo un gasto con cargo a una tarjeta de crédito puede ir en cuotas',
+  )
+
   let transaction: Transaction
   if (occurrence.kind === 'transfer') {
     invariant(occurrence.toAccountId !== undefined, 'La transferencia programada no tiene cuenta de destino')
@@ -288,7 +295,6 @@ export function confirmOccurrence(
     invariant(details.sharedExpenseId === undefined, 'Solo un gasto puede pagarse como gasto compartido')
     transaction = { ...base, kind: 'income', accountId: occurrence.accountId, categoryId: occurrence.categoryId }
   } else {
-    const account = requireAccount(context.accounts, occurrence.accountId)
     const plan =
       account.kind === 'credit_card'
         ? { installments: defaultInstallmentPlan(account, details.date, details.installments ?? 1) }
@@ -358,12 +364,26 @@ export function rescheduleRule(
   rule: RecurringRule,
   lastDayOfOld: LocalDate,
   next: { readonly id: RuleId; readonly startDate: LocalDate } & ScheduleChange,
+  /** The movements as they are now: a payment already made for a later date blocks the cut. */
+  transactions: readonly Transaction[] = [],
 ): { readonly closed: RecurringRule; readonly next: RecurringRule } {
   invariant(lastDayOfOld >= rule.startDate, 'La regla anterior debe conservar al menos su primera fecha')
   invariant(next.startDate > lastDayOfOld, 'La regla nueva debe empezar después de que termine la anterior')
   invariant(next.id !== rule.id, 'La regla nueva necesita un identificador distinto')
-  const closed: RecurringRule = { ...rule, endDate: lastDayOfOld }
-  const replacement: RecurringRule = { ...rule, ...next }
+  invariant(
+    !transactions.some((transaction) => {
+      const ref = transaction.voided ? undefined : occurrenceOf(transaction)
+      return ref !== undefined && ref.ruleId === rule.id && ref.dueDate > lastDayOfOld
+    }),
+    'Ya hay un pago confirmado para una fecha posterior al corte: elige un corte más adelante',
+  )
+  // Closing never extends a rule that had already ended earlier.
+  const endDate = rule.endDate !== undefined && rule.endDate < lastDayOfOld ? rule.endDate : lastDayOfOld
+  const closed: RecurringRule = { ...rule, endDate }
+  // The new rule keeps the old end only if that end is still ahead of its own start.
+  const { endDate: previousEnd, ...withoutEnd } = rule
+  const inheritedEnd = previousEnd !== undefined && previousEnd >= next.startDate ? { endDate: previousEnd } : {}
+  const replacement: RecurringRule = { ...withoutEnd, ...inheritedEnd, ...next }
   validateRule(closed)
   validateRule(replacement)
   return { closed, next: replacement }

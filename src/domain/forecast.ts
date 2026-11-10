@@ -1,5 +1,5 @@
 import type { LocalDate } from './dates'
-import { type SnapshotInput, ledgerState } from './magnitudes'
+import { type LedgerState, type SnapshotInput, ledgerState } from './magnitudes'
 import {
   type Projection,
   type ScenarioAssumptions,
@@ -13,24 +13,59 @@ import {
   variableSpendByMonth,
 } from './projection'
 
-/** The day the person started registering: the earliest opening date among their accounts. */
-export function firstActivityDate(input: SnapshotInput): LocalDate | null {
+/**
+ * The day the person really started registering: their first movement or their first part of a
+ * shared expense. An account opened months before the first movement is not history: those
+ * months are empty because nothing was being written down, not because nothing was spent.
+ */
+export function firstActivityDate(input: SnapshotInput, state: LedgerState): LocalDate | null {
   let first: LocalDate | null = null
-  for (const account of input.accounts) {
-    if (first === null || account.openingDate < first) {
-      first = account.openingDate
+  const consider = (date: LocalDate): void => {
+    if (date <= input.today && (first === null || date < first)) {
+      first = date
     }
+  }
+  for (const transaction of input.transactions) {
+    if (!transaction.voided) {
+      consider(transaction.date)
+    }
+  }
+  for (const share of state.householdShares) {
+    consider(share.date)
   }
   return first
 }
 
+/** Shared expenses that are a recurring rule in disguise: the rule projects them, not the history. */
+function recurringSharedExpenses(input: SnapshotInput): ReadonlySet<string> {
+  const ids = new Set<string>()
+  for (const coverage of input.sharedCoverage ?? []) {
+    ids.add(coverage.sharedExpenseId)
+  }
+  for (const transaction of input.transactions) {
+    if (!transaction.voided && transaction.kind === 'shared_payment' && transaction.occurrence !== undefined) {
+      ids.add(transaction.sharedExpenseId)
+    }
+  }
+  return ids
+}
+
+function historyFrom(input: SnapshotInput, state: LedgerState): VariableSpendHistory {
+  const months = historyMonths(firstActivityDate(input, state), input.today)
+  return summarizeVariableSpend(
+    variableSpendByMonth(
+      input.transactions,
+      state.householdShares,
+      months,
+      state.accountIndex,
+      recurringSharedExpenses(input),
+    ),
+  )
+}
+
 /** The person's own history of everyday spending, from the complete months registered so far. */
 export function variableSpendHistory(input: SnapshotInput): VariableSpendHistory {
-  const state = ledgerState(input, input.today)
-  const months = historyMonths(firstActivityDate(input), input.today)
-  return summarizeVariableSpend(
-    variableSpendByMonth(input.transactions, state.householdShares, months, state.accountIndex),
-  )
+  return historyFrom(input, ledgerState(input, input.today))
 }
 
 /**
@@ -42,10 +77,6 @@ export function variableSpendHistory(input: SnapshotInput): VariableSpendHistory
  */
 export function projectFinances(input: SnapshotInput, end: LocalDate, scenario: ScenarioAssumptions): Projection {
   const state = ledgerState(input, end)
-  const months = historyMonths(firstActivityDate(input), input.today)
-  const history = summarizeVariableSpend(
-    variableSpendByMonth(input.transactions, state.householdShares, months, state.accountIndex),
-  )
   return projectCashFlow({
     today: input.today,
     end,
@@ -55,7 +86,7 @@ export function projectFinances(input: SnapshotInput, end: LocalDate, scenario: 
       obligations: state.obligations,
       accounts: state.accountIndex,
     }),
-    history,
+    history: historyFrom(input, state),
     scenario,
     cards: input.accounts.filter((account) => account.kind === 'credit_card'),
   })

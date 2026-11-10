@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { indexAccounts } from './accounts'
 import { accountBalance } from './balances'
+import { coverageCandidates } from './coverage'
 import { defaultInstallmentPlan } from './credit-card'
 import { yearMonth } from './dates'
 import { DomainError } from './errors'
@@ -228,17 +229,39 @@ describe('la tarjeta no es plata gratis', () => {
     expect(snapshot.netWorth.liabilities).toBe(600_000)
   })
 
-  it('un gasto programado con tarjeta cuenta si entra en la próxima cuenta', () => {
-    const streaming = rule('streaming', '2026-11-20', 9_990, { accountId: CARD, categoryId: cat('suscripciones') })
-    // No statement day: the charge of the 20th is assumed to fall in the bill of 5 December.
-    expect(financialSnapshot(input({ rules: [streaming] })).obligationsTotal).toBe(9_990)
+  it('un gasto programado con tarjeta cuenta desde el primer día del mes, igual que uno con débito', () => {
+    const subscription = (accountId: typeof CARD) =>
+      rule('streaming', '2026-11-28', 9_990, { accountId, categoryId: cat('suscripciones') })
+    // The charge of the 28th leaves the account with the bill of 5 December, but it is owed all month.
+    for (const day of ['2026-11-01', '2026-11-04', '2026-11-05', '2026-11-27']) {
+      const byCard = financialSnapshot(input({ rules: [subscription(CARD)], today: d(day) }))
+      const byDebit = financialSnapshot(input({ rules: [subscription(CHECKING)], today: d(day) }))
+      expect(byCard.obligations).toMatchObject([{ source: 'scheduled', dueDate: '2026-12-05', amount: 9_990 }])
+      expect(byCard.available.available).toBe(990_010)
+      expect(byDebit.available.available).toBe(990_010)
+    }
+    // Next month's charge is not owed yet, on the card or by debit.
+    const december = rule('streaming', '2026-12-10', 9_990, { accountId: CARD, categoryId: cat('suscripciones') })
+    expect(financialSnapshot(input({ rules: [december] })).obligationsTotal).toBe(0)
+  })
 
-    // With statement day 20 and payment day 5: charged on the 25th, it goes to the bill of 5 January.
-    const accounts = [...baseAccounts({ checking: 1_000_000 }).slice(0, 3), account(CARD, 'credit_card', 0, { paymentDay: 5, statementDay: 20 })]
-    const late = rule('streaming', '2026-11-25', 9_990, { accountId: CARD, categoryId: cat('suscripciones') })
-    expect(financialSnapshot(input({ accounts, rules: [late] })).obligationsTotal).toBe(0)
-    const early = rule('streaming', '2026-11-15', 9_990, { accountId: CARD, categoryId: cat('suscripciones') })
-    expect(financialSnapshot(input({ accounts, rules: [early] })).obligationsTotal).toBe(9_990)
+  it('con un presupuesto con fondo, el cargo programado a la tarjeta nunca queda sin contar', () => {
+    const streaming = rule('streaming', '2026-11-28', 9_990, { accountId: CARD, categoryId: cat('suscripciones') })
+    const withBudget = { rules: [streaming], budgets: [budget('suscripciones', 30_000)] }
+    // 30.000 are set apart for subscriptions all month: 9.990 as an obligation, the rest as a reserve.
+    for (const day of ['2026-11-01', '2026-11-04', '2026-11-05', '2026-11-20', '2026-11-27']) {
+      const snapshot = financialSnapshot(input({ ...withBudget, today: d(day) }))
+      expect(snapshot.obligationsTotal).toBe(9_990)
+      expect(snapshot.reservedTotal).toBe(20_010)
+      expect(snapshot.available.available).toBe(970_000)
+    }
+  })
+
+  it('un gasto programado desde la cuenta de ahorro no es obligación, y el presupuesto con fondo lo sigue cubriendo', () => {
+    const fromSavings = rule('seguro', '2026-11-20', 25_000, { accountId: SAVINGS, categoryId: cat('salud') })
+    const snapshot = financialSnapshot(input({ rules: [fromSavings], budgets: [budget('salud', 40_000)] }))
+    expect(snapshot.obligationsTotal).toBe(0)
+    expect(snapshot.reservedTotal).toBe(40_000)
   })
 
   it('confirmar un cargo programado a la tarjeta en su fecha no cambia lo disponible', () => {
@@ -409,6 +432,44 @@ describe('un arriendo compartido y además programado no se cuenta dos veces', (
       }),
     )
     expect(voided.obligations.map((item) => [item.source, item.amount])).toEqual([['scheduled', 200_000]])
+  })
+
+  it('una cobertura que no tiene sentido se ignora: el gasto programado sigue pendiente', () => {
+    const pabloRule = rule('arriendo', '2026-11-05', 200_000)
+    const ref = { ruleId: pabloRule.id, dueDate: d('2026-11-05') }
+    const scheduledOwed = (expenses: HouseholdView['expenses'], sharedExpenseId: string) =>
+      financialSnapshot(
+        input({
+          rules: [pabloRule],
+          household: { ...household(PABLO), expenses },
+          sharedCoverage: [{ ref, sharedExpenseId: toId(sharedExpenseId) }],
+        }),
+      ).obligations.filter((item) => item.source === 'scheduled')
+
+    // A taxi cannot cover the rent: another category.
+    const taxi = sharedExpense('taxi', '2026-11-05', 10_000, DIEGO, undefined, { categoryId: cat('transporte') })
+    expect(scheduledOwed([taxi], 'taxi')).toHaveLength(1)
+    // A shared expense that Pablo paid himself, or one he takes no part in, covers nothing of his.
+    const ownPayment = sharedExpense('propio', '2026-11-05', 400_000, PABLO, undefined, { categoryId: cat('arriendo') })
+    expect(scheduledOwed([ownPayment], 'propio')).toHaveLength(1)
+    const notHis = sharedExpense('ajeno', '2026-11-05', 400_000, DIEGO, [{ participantId: DIEGO, weight: 1 }], {
+      categoryId: cat('arriendo'),
+    })
+    expect(scheduledOwed([notHis], 'ajeno')).toHaveLength(1)
+    // And one that does not exist.
+    expect(scheduledOwed([sharedRent], 'no-existe')).toHaveLength(1)
+    expect(scheduledOwed([sharedRent], 'renta-nov')).toHaveLength(0)
+  })
+
+  it('propone la cobertura cuando un gasto compartido parece ser el mismo gasto programado', () => {
+    const pabloRule = rule('arriendo', '2026-11-05', 200_000)
+    const snapshot = financialSnapshot(input({ rules: [pabloRule], household: household(PABLO) }))
+    const candidates = coverageCandidates(snapshot.occurrences, PABLO, [sharedRent], [], today)
+    expect(candidates).toEqual([{ ref: { ruleId: 'arriendo', dueDate: '2026-11-05' }, sharedExpenseId: 'renta-nov' }])
+    // Once it is covered, there is nothing left to propose.
+    expect(coverageCandidates(snapshot.occurrences, PABLO, [sharedRent], candidates, today)).toEqual([])
+    // Diego paid it himself: for him there is nothing to cover.
+    expect(coverageCandidates(snapshot.occurrences, DIEGO, [sharedRent], [], today)).toEqual([])
   })
 
   it('para quien pagó: el pago confirma la regla y su gasto es solo su parte', () => {

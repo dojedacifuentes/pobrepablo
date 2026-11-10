@@ -65,9 +65,15 @@ describe('formato es-CL', () => {
 
   it('no adivina: un punto que no separa miles se rechaza en vez de leerse mal', () => {
     // Read naively, «1500.50» would become 150.050 pesos.
-    for (const invalid of ['1500.50', '35990.00', '1.5', '1.2.3', '12.34', '1.2500', '.500', '1.']) {
+    for (const invalid of ['1500.50', '35990.00', '1.5', '1.2.3', '12.34', '1.2500', '.500', '1.', '0.500']) {
       expect(parseCLP(invalid)).toBeNull()
     }
+    // Spaces never join digits: «1 5» is not fifteen.
+    for (const invalid of ['1 5', '1.250 000', '12 000']) {
+      expect(parseCLP(invalid)).toBeNull()
+    }
+    expect(parseCLP('$ 1.250')).toBe(1250)
+    expect(parseCLP('- $500')).toBe(-500)
     expect(parseCLP('1.500')).toBe(1500)
     expect(parseCLP('35.990')).toBe(35_990)
     expect(parseCLP('0')).toBe(0)

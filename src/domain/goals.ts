@@ -47,18 +47,24 @@ export function validateGoal(goal: Goal): void {
 }
 
 /**
- * What is reserved for one goal on `asOf`. The reserve is followed in date order and can never go
+ * What is reserved for one goal on `asOf`. The reserve is followed day by day and can never go
  * below zero: releasing more than there was leaves it empty, and a later reservation starts again
  * from zero instead of paying for the excess.
+ *
+ * Within one day, what was reserved counts before what was released, whatever the identifiers
+ * are: reserving and releasing on the same day always gives the same result.
  */
 export function reservedForGoal(
   goalId: GoalId,
   reservations: readonly GoalReservation[],
   asOf: LocalDate,
 ): Money {
+  const releasesLast = (reservation: GoalReservation): number => (reservation.amount < 0 ? 1 : 0)
   const relevant = reservations
     .filter((reservation) => !reservation.voided && reservation.goalId === goalId && reservation.date <= asOf)
-    .toSorted((a, b) => compareDates(a.date, b.date) || compareIds(a.id, b.id))
+    .toSorted(
+      (a, b) => compareDates(a.date, b.date) || releasesLast(a) - releasesLast(b) || compareIds(a.id, b.id),
+    )
   let total = ZERO
   for (const reservation of relevant) {
     total = atLeastZero(add(total, reservation.amount))
