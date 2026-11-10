@@ -33,9 +33,9 @@ Fuente: `docs/ESPECIFICACION.md` §9. Antes de empezar una fase, lee las seccion
   funcionales (YNAB, Copilot Money, Monzo, Splitwise); un ADR por cada decisión abierta.
 - **Salida:** `docs/01-investigacion.md` y los ADR listos. **PARADA.**
 
-## Fase 2 · Dominio financiero
+## Fase 2 · Dominio financiero — hecha (10-nov-2026)
 
-- Leer: §3.1, §4 completa, §10 (Dominio).
+- Leer: §3.1, §4 completa, §10 (Dominio). El modelo resultante está en `docs/07-modelo-financiero.md`.
 - Contenido:
   - Inicializar el proyecto (Vite + React + TypeScript estricto) con las versiones fijadas en el ADR 0006.
   - Scripts `npm run verify` (typecheck → lint → pruebas → build) y `npm run e2e`.
@@ -48,7 +48,8 @@ Fuente: `docs/ESPECIFICACION.md` §9. Antes de empezar una fase, lee las seccion
 
 ## Fase 3 · Datos locales
 
-- Leer: §3.2, §3.3, §10 (Datos).
+- Leer: §3.2, §3.3, §10 (Datos), y en `docs/ESTADO.md` las seis tareas que la revisión de la fase 2 dejó para esta
+  fase (índice único de confirmaciones, registros del Hogar en una misma transacción, `rescheduleRule`, categorías).
 - Contenido: esquema Dexie versionado, migraciones probadas, interfaces de repositorio y su implementación Dexie,
   transacciones, claves de idempotencia, anulación con rastro, auditoría append-only, perfiles (Pablo, Diego, Demo),
   dataset Demo ficticio y aislado, exportación e importación JSON validadas con Zod, `navigator.storage.persist()`.
