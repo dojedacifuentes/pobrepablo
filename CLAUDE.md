@@ -67,6 +67,15 @@ Detalle en `docs/adr/`. Aprobadas por el propietario el 10-nov-2026.
 - **0007 iPhone:** Safari borra los datos de un sitio no instalado tras 7 días sin uso. Por eso: instalar antes de
   cargar datos, «restaurar respaldo» siempre a la vista y recordatorio de respaldo semanal.
 
+## Decisiones de las fases 3 y 4
+
+Propuestas el 10-nov-2026; **falta la aprobación del propietario** (ADR 0009 y 0010).
+
+- **0009 Datos locales:** una base de datos por perfil (`nexo-pablo`, `nexo-diego`, `nexo-demo`). Restaurar un
+  respaldo reemplaza todo el perfil y deja una entrada en la auditoría. No se guarda ningún saldo. «Desde cuándo se
+  registra» se deduce de la primera cuenta. Exportar nunca se bloquea por el contenido.
+- **0010 Registro rápido:** teclado numérico propio dentro de la hoja; hojas opacas; fechas en palabras.
+
 ## Arquitectura
 
 ```
@@ -80,6 +89,8 @@ src/
 ```
 
 - **La interfaz nunca calcula dinero.** Todo monto que se muestra sale de una función de `domain/`.
+- **Las pantallas importan solo desde `@/data`** (hooks y operaciones), nunca Dexie ni archivos internos de `data/`:
+  lo impide ESLint. El contrato está en `src/data/ports.ts`; cómo funciona, en `docs/05-arquitectura-local-first.md`.
 - `domain/` y `narrative/` son puros y deterministas: se prueban sin navegador.
 - `narrative/` lee eventos; jamás escribe datos financieros ni bloquea una operación.
 - `features/` habla con interfaces de repositorio, no con Dexie: una capa de sincronización futura debe poder
@@ -138,7 +149,7 @@ npm run dev        # servidor de desarrollo
 npm run verify     # typecheck → lint → pruebas unitarias y de propiedades → build
 npm run e2e        # Playwright en los seis viewports móviles (construye y sirve la app solo)
 npm run test:watch # pruebas mientras se escribe
-npm run capturas   # capturas de cada pantalla en todos los viewports (se crea en la fase 4)
+npm run capturas   # capturas de cada pantalla en los ocho tamaños, en capturas/ (perfil Demo o datos inventados)
 ```
 
 ## Trampas ya encontradas
@@ -151,11 +162,28 @@ npm run capturas   # capturas de cada pantalla en todos los viewports (se crea e
 - Vitest solo ejecuta `src/**/*.test.ts`. Constructores de prueba en `src/domain/testing/builders.ts`; generadores
   aleatorios en `testing/arbitraries.ts`.
 - `eslint-plugin-react-hooks` 7 se usa como `reactHooks.configs.flat.recommended`.
+- **Dexie envuelve los errores** lanzados dentro de una transacción: el motivo real queda en `inner`. Se pasa siempre
+  por `toDataError`; para saber si el error lo explicó la app, `isExplained`.
+- **Dexie abre sin quejarse una base más nueva que el código** y hasta le repone lo que la versión nueva quitó. Por eso
+  `openDatabase` mira la versión con IndexedDB a secas antes de abrir.
+- **`liveQuery` no hace nada en Node** si no existe un IndexedDB global: `memoryIndexedDb()` (pruebas) lo resuelve.
+- **El esquema de la base no se edita:** cada cambio es una versión nueva en `src/data/dexie/database.ts`, con su
+  prueba de migración y su paso de conversión de respaldos. Una prueba fija el texto de la versión 1.
+- Dentro de una transacción de Dexie no se espera nada que no sea de Dexie (ni `crypto`, ni `fetch`, ni temporizadores).
+- Las pruebas de `src/data/` usan `testPhone()` (`src/data/testing/harness.ts`): un teléfono inventado con su base en
+  memoria, su `localStorage` y su reloj. Las de propiedades contra la base corren menos casos (`databaseRuns`).
+- Vitest 5: las opciones de una prueba van como **segundo** argumento (`it(nombre, { timeout }, fn)`).
+- **No ejecutar `npm run e2e`, `npm run capturas` ni `npm run verify` mientras corre una comprobación de mutaciones:**
+  ambas compilan o prueban el mismo código, que la comprobación rompe a propósito un rato.
+- La vista previa integrada de la app de Claude usa el `launch.json` de otra carpeta: para ver NEXO, `npm run capturas`
+  y mirar las imágenes, o `npm run dev`.
+- Un respaldo, cifrado o no, tiene que seguir abriéndose en versiones futuras: no cambiar el formato sin subir su
+  versión (`docs/06-privacidad-y-respaldos.md`).
 
 ## Entorno
 
-Windows 11, Node 24, npm. No están instalados `gh` ni la CLI de Vercel. Playwright tiene Chromium (compilación 1254);
-WebKit se descarga en la fase 4. Detalle en `docs/00-inventario-herramientas.md`.
+Windows 11, Node 24, npm. No están instalados `gh` ni la CLI de Vercel. Playwright tiene Chromium y WebKit. Detalle
+en `docs/00-inventario-herramientas.md`.
 
 ## Subagentes y skills del proyecto
 

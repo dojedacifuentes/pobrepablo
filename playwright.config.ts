@@ -14,7 +14,11 @@ const port = 4173
 
 export default defineConfig({
   testDir: 'e2e',
+  // The screenshots have their own configuration: npm run capturas.
+  testIgnore: 'capturas/**',
   fullyParallel: true,
+  // Eight browsers at once starve WebKit on this computer until its pages crash.
+  workers: process.env.CI ? 2 : 4,
   forbidOnly: Boolean(process.env.CI),
   reporter: [['list']],
   use: {
@@ -23,16 +27,29 @@ export default defineConfig({
     timezoneId: 'America/Santiago',
     trace: 'retain-on-failure',
   },
-  projects: mobileViewports.map((viewport) => ({
-    name: `movil-${viewport.name}`,
-    use: {
-      browserName: 'chromium' as const,
-      viewport: { width: viewport.width, height: viewport.height },
-      deviceScaleFactor: 2,
-      hasTouch: true,
-      isMobile: true,
-    },
-  })),
+  projects: [
+    ...mobileViewports.map((viewport) => ({
+      name: `movil-${viewport.name}`,
+      use: {
+        browserName: 'chromium' as const,
+        viewport: { width: viewport.width, height: viewport.height },
+        deviceScaleFactor: 2,
+        hasTouch: true,
+        isMobile: true,
+      },
+    })),
+    // WebKit is the engine of Safari on the iPhone. This emulates it; it is not a real phone.
+    ...[mobileViewports[0], mobileViewports[3]].map((viewport) => ({
+      name: `webkit-${viewport.name}`,
+      use: {
+        browserName: 'webkit' as const,
+        viewport: { width: viewport.width, height: viewport.height },
+        deviceScaleFactor: 2,
+        hasTouch: true,
+        isMobile: true,
+      },
+    })),
+  ],
   webServer: {
     command: `npm run build && npm run preview -- --port ${String(port)} --strictPort`,
     url: `http://localhost:${String(port)}`,
