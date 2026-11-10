@@ -1,0 +1,24 @@
+/**
+ * The financial domain of NEXO: pure, deterministic functions over whole pesos and calendar days.
+ * No React, no database, no system clock. The interface never calculates money: it asks here.
+ */
+export * from './accounts'
+export * from './balances'
+export * from './budgets'
+export * from './categories'
+export * from './credit-card'
+export * from './dates'
+export * from './errors'
+export * from './forecast'
+export * from './goals'
+export * from './household'
+export * from './household-ledger'
+export * from './ids'
+export * from './magnitudes'
+export * from './money'
+export * from './obligations'
+export * from './projection'
+export * from './recurring'
+export * from './reports'
+export * from './split'
+export * from './transactions'

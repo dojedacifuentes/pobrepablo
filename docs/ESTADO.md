@@ -1,65 +1,65 @@
 # Estado del proyecto
 
-**Última actualización:** 9 de noviembre de 2026 (PC 1).
+**Última actualización:** 10 de noviembre de 2026 (PC 1).
 
 ## Dónde estamos
 
-**Fases 0 y 1 terminadas. PARADA: se espera la aprobación del propietario antes de empezar la fase 2.**
+**Fase 2 (dominio financiero) en cierre.** El código y sus pruebas están escritos y en verde. Falta la segunda pasada
+del revisor independiente y poner al día `docs/07-modelo-financiero.md` con las correcciones.
 
-Todavía no hay código ni `package.json`: el proyecto se inicializa en la fase 2. Por eso `npm run verify` aún no
-existe y no se ejecutó.
+Repositorio: `github.com/dojedacifuentes/pobrepablo`, **público** por decisión del propietario (ADR 0008).
 
 ## Hecho
 
-### Fase 0 · Arranque
+- **Fases 0 y 1:** memoria del proyecto, inventario, investigación y ocho ADR aceptados.
+- **Fase 2:**
+  - Proyecto inicializado con las versiones del ADR 0006. `npm run verify` y `npm run e2e` existen.
+  - `src/domain/`: dinero, fechas, reparto, cuentas, movimientos, saldos, reportes, tarjeta, recurrentes, presupuestos,
+    metas, Hogar (y la coherencia de sus registros pareados), obligaciones, magnitudes, proyección y pronóstico.
+  - 195 pruebas (unitarias y de propiedades) en verde, también con 4.000 casos aleatorios por propiedad.
+  - Comprobación de mutaciones: se rompió el dominio en 39 puntos y las pruebas detectaron los 39.
+  - Revisión independiente del `revisor-financiero`: 16 hallazgos, todos corregidos en el código y con pruebas.
+  - `vercel.json` listo (sitio estático con rewrite a `index.html`).
 
-- Carpeta `Desktop\nexo` creada con Git (rama `main`, sin remoto).
-- Entorno inspeccionado e inventario en `docs/00-inventario-herramientas.md`.
-- Memoria del proyecto: `CLAUDE.md`, `docs/PLAN.md`, este archivo, `docs/adr/`.
-- La especificación completa quedó guardada tal cual en `docs/ESPECIFICACION.md`.
-- Subagentes del proyecto en `.claude/agents/`: `investigador`, `revisor-financiero`, `guionista`, `auditor-movil`.
-- Skills del proyecto en `.claude/skills/`: `verificar`, `capturas`, `cerrar-sesion`. Los scripts que invocan
-  (`verify`, `e2e`, `capturas`) se crean en las fases 2 y 4.
+## Qué corrigió la revisión (resumen)
 
-### Fase 1 · Investigación y decisiones
-
-- `docs/01-investigacion.md`: los nueve repositorios pedidos, dos proyectos más con Dexie + PWA, las cuatro
-  referencias funcionales, trece patrones que adoptamos y los datos que respaldan cada decisión.
-- Siete ADR en `docs/adr/`, todos en estado **propuesta**: gráficos, tipografía, estado, respaldo cifrado, service
-  worker, versiones del stack y almacenamiento en iPhone.
-
-## Lo que el propietario debe decidir en esta parada
-
-1. **¿Se aprueban las siete propuestas?** Al aprobarlas se marcan como aceptadas en `docs/adr/README.md` y en cada
-   archivo.
-2. **Respaldo cifrado en V1** (ADR 0004), con «cifrado» como opción preseleccionada al exportar. Si se olvida la
-   frase, ese respaldo no se recupera; la exportación sin cifrar sigue disponible.
-3. **TypeScript 6 en vez de 7** (ADR 0006). Es el único punto donde el stack cerrado tuvo un impedimento real.
-4. **El peso sobrante de un reparto impar** le toca siempre a la misma persona (es lo que fija la especificación).
-   La alternativa es alternarlo. Hasta un peso por gasto.
+1. Un movimiento no puede tener fecha futura; uno que la tenga no esconde la obligación que dice pagar.
+2. Lo comprado con tarjeta baja lo disponible de inmediato, igual que con débito; la tarjeta admite día de facturación.
+3. Un gasto compartido que además es recurrente ya no se cuenta dos veces.
+4. Los dos lados de un registro del Hogar se crean y anulan juntos, y hay una revisión que detecta pares descuadrados.
+5. No se puede confirmar dos veces la misma ocurrencia.
+6. No se arrastran obligaciones anteriores al saldo inicial de una cuenta.
+7. Cambiar el calendario de una regla conserva lo ya confirmado.
+8. El lector de montos rechaza «1500.50» en vez de leerlo como 150.050.
+9. Convertir una reserva de meta en transferencia no cuenta el ahorro dos veces.
+10. La proyección descuenta el gasto con tarjeta cuando se paga la tarjeta, no el día de la compra.
 
 ## Qué sigue
 
-Con el «sí»: marcar los ADR como aceptados y empezar la **fase 2 · Dominio financiero** (`docs/PLAN.md`): inicializar
-el proyecto con las versiones del ADR 0006, crear `npm run verify` y `npm run e2e`, y construir `src/domain/` con la
-prueba primero. Al inicializar, volver a consultar las versiones en npm.
+1. Segunda pasada del revisor sobre las correcciones. La fase 2 se cierra sin hallazgos abiertos.
+2. Actualizar `docs/07-modelo-financiero.md`.
+3. **Fase 3 · Datos locales** (`docs/PLAN.md`). Tareas que la revisión dejó para esa fase:
+   - Índice único por (regla, fecha) para que dos confirmaciones simultáneas no pasen.
+   - Guardar los dos lados de un registro del Hogar en la misma transacción y ejecutar `householdLedgerIssues`.
+   - Repetir la prueba «recalcular = incremental» contra los saldos guardados.
 
 ## Lo que no está verificado
 
-- Nada de los repositorios de referencia se ejecutó: el número de toques para registrar un movimiento se infirió del
-  código.
-- En un iPhone real: que los datos creados en Safari no pasan a la app instalada, qué ocurre al quitar el ícono y cómo
-  se comporta `persist()` (ADR 0007).
-- Cómo se ve la tipografía elegida sobre el fondo oscuro (se comprueba en la fase 4).
-- El peso real de los gráficos en nuestro build (se mide en la fase 8).
-- Que la CLI de shadcn acepte un `tsconfig` sin `baseUrl` (se comprueba al instalar).
-- La gamificación de Habitica se revisó solo en su wiki comunitaria.
+- Nada se ha probado en un teléfono real ni en WebKit (se instala en la fase 4).
+- En un iPhone: el traspaso de datos de Safari a la app instalada y el comportamiento de `persist()` (ADR 0007).
+- El despliegue en Vercel: la configuración está escrita, pero no se ha desplegado.
+- La app todavía no tiene pantallas: solo un aviso de «en construcción».
+
+## Decisiones para revisar con el propietario
+
+- **El período es el mes calendario.** Lo que vence el día 1 no se descuenta el día 30 (salvo la tarjeta, que siempre
+  incluye su próxima cuenta). Alternativa: una ventana hasta el próximo ingreso.
+- **Los vencidos no caducan.** Un recurrente que nunca se confirmó sigue contando como deuda hasta confirmarlo o
+  saltárselo. Pausar una regla oculta también sus vencidos.
+- **El peso sobrante de un reparto empatado** le toca siempre a la misma persona (lo fija la especificación).
 
 ## Problemas conocidos y bloqueos
 
-- **GitHub CLI y CLI de Vercel no están instalados**, y el conector de GitHub de Claude falló al conectar (error de
-  autorización). No bloquea nada hasta la fase 10.
-- **Playwright solo tiene Chromium descargado.** WebKit se instala en la fase 4.
-- **No hay teléfonos reales** disponibles desde este entorno: las pruebas en dispositivo quedan para el propietario.
-- La sesión de arranque se abrió en la carpeta de `eva.academy`. **Las próximas sesiones deben abrirse en
-  `Desktop\nexo`**, para que carguen este `CLAUDE.md`, los subagentes y las skills del proyecto.
+- GitHub CLI y CLI de Vercel no están instalados. El push funciona con las credenciales de Git de este equipo.
+- Playwright solo tiene Chromium. WebKit se instala en la fase 4.
+- Las próximas sesiones deben abrirse en `Desktop\nexo`.

@@ -45,12 +45,12 @@ No se reabren salvo impedimento técnico concreto y verificable; en ese caso, de
   inyectado; nunca llama a `Date.now()`.
 - Interfaz, microcopy y documentación en español de Chile. Código e identificadores en inglés.
 - Mobile-first absoluto. Referencia 390 × 844; también 320 × 568, 360 × 800, 375 × 667, 412 × 915 y 430 × 932.
-- Repositorio de GitHub **privado**; nunca se suben datos financieros reales. Despliegue estático en Vercel.
+- Repositorio: `github.com/dojedacifuentes/pobrepablo`, **público** por decisión del propietario (ADR 0008; la
+  especificación decía privado). Nunca se suben datos financieros reales. Despliegue estático en Vercel.
 
 ## Decisiones de la fase 1
 
-Detalle en `docs/adr/`. Son **propuestas** hasta que el propietario las apruebe en la parada de la fase 1
-(el estado real de cada una está en `docs/adr/README.md`).
+Detalle en `docs/adr/`. Aprobadas por el propietario el 10-nov-2026.
 
 - **0001 Gráficos:** SVG propio; `d3-scale` y `d3-shape` solo para los cálculos. Sin biblioteca de gráficos. Carga
   diferida, y todo gráfico con su equivalente en texto.
@@ -133,19 +133,29 @@ src/
 
 ## Comandos
 
-Existen desde la fase 2:
-
 ```bash
 npm run dev        # servidor de desarrollo
 npm run verify     # typecheck → lint → pruebas unitarias y de propiedades → build
-npm run e2e        # Playwright en los viewports móviles
-npm run capturas   # capturas de cada pantalla en todos los viewports (desde la fase 4)
+npm run e2e        # Playwright en los seis viewports móviles (construye y sirve la app solo)
+npm run test:watch # pruebas mientras se escribe
+npm run capturas   # capturas de cada pantalla en todos los viewports (se crea en la fase 4)
 ```
+
+## Trampas ya encontradas
+
+- `Money` es un tipo marcado: `-monto` es error de lint. Se usa `negate(monto)`, `add`, `subtract`.
+- En `src/domain/` (también en sus pruebas) no se puede usar `Date`, `Math.random`, `crypto`, `window` ni importar
+  React, Dexie u otras capas: lo impide ESLint. Las fechas de prueba se escriben con `d('2026-11-09')`.
+- El modelo y sus decisiones de interpretación están en `docs/07-modelo-financiero.md`: leerlo antes de tocar
+  `src/domain/`. Al cambiar el dominio, pedir revisión al subagente `revisor-financiero`.
+- Vitest solo ejecuta `src/**/*.test.ts`. Constructores de prueba en `src/domain/testing/builders.ts`; generadores
+  aleatorios en `testing/arbitraries.ts`.
+- `eslint-plugin-react-hooks` 7 se usa como `reactHooks.configs.flat.recommended`.
 
 ## Entorno
 
-Windows 11, Node 24, npm. No están instalados `gh` ni la CLI de Vercel. Playwright tiene solo Chromium en caché: WebKit
-se descarga en la fase 4. Detalle en `docs/00-inventario-herramientas.md`.
+Windows 11, Node 24, npm. No están instalados `gh` ni la CLI de Vercel. Playwright tiene Chromium (compilación 1254);
+WebKit se descarga en la fase 4. Detalle en `docs/00-inventario-herramientas.md`.
 
 ## Subagentes y skills del proyecto
 

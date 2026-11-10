@@ -1,6 +1,6 @@
 # ADR 0001 · Biblioteca de gráficos
 
-- **Estado:** propuesta (9-nov-2026); se confirma en la parada de la fase 1.
+- **Estado:** aceptada por el propietario el 10-nov-2026 (propuesta el 9-nov-2026).
 - **Decisión abierta n.º 1** de la especificación §1: la que rinda mejor en pantallas estrechas y pese menos.
 
 ## Contexto

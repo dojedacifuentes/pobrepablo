@@ -20,13 +20,13 @@ Fuente: `docs/ESPECIFICACION.md` §9. Antes de empezar una fase, lee las seccion
 
 ---
 
-## Fase 0 · Arranque
+## Fase 0 · Arranque — hecha (9-nov-2026)
 
 - Leer: §2.
 - Contenido: inspección del entorno, inventario de herramientas, archivos de memoria, subagentes y skills del proyecto.
 - **Salida:** `docs/00-inventario-herramientas.md`, `CLAUDE.md`, `docs/PLAN.md`, `docs/ESTADO.md`, `docs/adr/` creados.
 
-## Fase 1 · Investigación y decisiones
+## Fase 1 · Investigación y decisiones — hecha (9-nov-2026); aprobada el 10-nov-2026
 
 - Leer: §1 (decisiones abiertas) y §8.
 - Contenido: revisión de los repositorios de referencia y de dos o tres proyectos con Dexie/IndexedDB + PWA; referencias
@@ -55,7 +55,9 @@ Fuente: `docs/ESPECIFICACION.md` §9. Antes de empezar una fase, lee las seccion
   Hooks de consulta reactiva expuestos desde `data/` (ADR 0003). Núcleo del respaldo cifrado (ADR 0004) y marcador de
   detección de pérdida de datos (ADR 0007). `docs/05-arquitectura-local-first.md` y
   `docs/06-privacidad-y-respaldos.md`.
-- **Salida:** prueba de ida y vuelta: exportar → borrar → importar deja la base idéntica, con y sin cifrado.
+- **Salida:** prueba de ida y vuelta: exportar → borrar → importar deja la base idéntica, con y sin cifrado. Prueba de
+  propiedades: importar dos veces el mismo respaldo deja la base idéntica (invariante de §4.3 que quedó para esta
+  fase).
 
 ## Fase 4 · Rebanada vertical
 
@@ -89,7 +91,8 @@ Fuente: `docs/ESPECIFICACION.md` §9. Antes de empezar una fase, lee las seccion
 - Leer: §3.3, §4.2 (gastos compartidos y reparto), §5.5 (Hogar).
 - Contenido: gastos compartidos, saldos internos, reembolsos, paquete Hogar con fusión determinista por UUID y
   resolución explícita de conflictos.
-- **Salida:** prueba: dos bases independientes intercambian paquetes y convergen al mismo estado.
+- **Salida:** prueba: dos bases independientes intercambian paquetes y convergen al mismo estado. Prueba de
+  propiedades: importar dos veces el mismo paquete no cambia nada (invariante de §4.3).
 
 ## Fase 8 · Análisis
 

@@ -1,6 +1,7 @@
 # ADR 0002 · Tipografía
 
-- **Estado:** propuesta (9-nov-2026). La elección se confirma con los ojos: en la parada de la fase 4, con capturas.
+- **Estado:** aceptada por el propietario el 10-nov-2026. La elección se confirma con los ojos en la parada de la
+  fase 4, con capturas.
 - **Decisión abierta n.º 2** de la especificación §1.
 
 ## Contexto

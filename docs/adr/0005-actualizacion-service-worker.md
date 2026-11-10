@@ -1,6 +1,6 @@
 # ADR 0005 · Actualización del service worker
 
-- **Estado:** propuesta (9-nov-2026); se confirma en la parada de la fase 1.
+- **Estado:** aceptada por el propietario el 10-nov-2026 (propuesta el 9-nov-2026).
 - **Decisión abierta n.º 5** de la especificación §1.
 
 ## Contexto

@@ -1,6 +1,6 @@
 # ADR 0006 · Versiones del stack
 
-- **Estado:** propuesta (9-nov-2026); se confirma en la parada de la fase 1.
+- **Estado:** aceptada por el propietario el 10-nov-2026 (propuesta el 9-nov-2026).
 - No es una de las cinco decisiones abiertas: registra un impedimento técnico encontrado al verificar el stack cerrado.
 
 ## Contexto

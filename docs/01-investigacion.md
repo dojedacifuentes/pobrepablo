@@ -66,9 +66,9 @@ salvo indicación contraria.
 
 ## 4. Decisiones abiertas
 
-Cada una tiene su ADR en `docs/adr/`. Todas están como **propuesta** hasta la parada de la fase 1.
+Cada una tiene su ADR en `docs/adr/`. El propietario las aprobó todas el 10-nov-2026.
 
-| # | Decisión abierta | Propuesta | ADR |
+| # | Decisión abierta | Decisión | ADR |
 |---|---|---|---|
 | 1 | Biblioteca de gráficos | Gráficos propios en SVG, con `d3-scale` y `d3-shape` solo para los cálculos: unos 20 kB, frente a unos 100 de Recharts. | 0001 |
 | 2 | Tipografía | Inter (interfaz y montos, cifras tabulares) + Instrument Serif (títulos narrativos), autoalojadas; unos 68 kB. Se confirma con capturas en la fase 4. | 0002 |

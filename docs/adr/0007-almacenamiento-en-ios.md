@@ -1,6 +1,6 @@
 # ADR 0007 · Almacenamiento en iPhone: instalar primero y respaldar seguido
 
-- **Estado:** propuesta (9-nov-2026); se confirma en la parada de la fase 1.
+- **Estado:** aceptada por el propietario el 10-nov-2026 (propuesta el 9-nov-2026).
 - Responde a la especificación §3.2: verificar la política de WebKit y diseñar en consecuencia.
 
 ## Contexto (verificado en documentación vigente de WebKit y MDN)
