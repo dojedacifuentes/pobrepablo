@@ -1,0 +1,38 @@
+# Dependencias y compilados
+node_modules/
+dist/
+dev-dist/
+coverage/
+*.tsbuildinfo
+
+# Pruebas
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# Datos financieros: NUNCA se suben respaldos ni paquetes reales
+respaldos/
+backups/
+*.nexo.json
+*.nexo-hogar.json
+*.nexo.enc
+cartolas/
+
+# Entorno y secretos (no deberían existir: la app no tiene backend)
+.env
+.env.*
+!.env.example
+
+# Vercel y editor
+.vercel/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+
+# Ajustes locales de Claude Code
+.claude/settings.local.json
