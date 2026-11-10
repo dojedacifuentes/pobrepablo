@@ -62,7 +62,7 @@ Fuente: `docs/ESPECIFICACION.md` §9. Antes de empezar una fase, lee las seccion
 - **Cómo quedó:** la ida y vuelta deja la base idéntica **más una entrada de auditoría** que dice que se restauró un
   respaldo (ADR 0009). Revisión independiente con 18 hallazgos, todos corregidos.
 
-## Fase 4 · Rebanada vertical
+## Fase 4 · Rebanada vertical — hecha y publicada (10-nov-2026)
 
 - Leer: §5.1–§5.4, §7, §10 (Móvil y Visual).
 - Contenido: sistema de diseño (tokens, tipografía del ADR 0002, componentes base, bottom sheet), navegación inferior
@@ -72,6 +72,10 @@ Fuente: `docs/ESPECIFICACION.md` §9. Antes de empezar una fase, lee las seccion
   `docs/04-design-system.md` y `docs/03-storyboard-mobile.md` (primera versión).
 - **Salida:** flujo E2E en verde: abrir → registrar gasto → ver saldo y lista actualizados → recargar → los datos siguen
   ahí. Capturas en los seis viewports móviles, revisadas. **PARADA con capturas.**
+- **Cómo quedó:** 56 recorridos de punta a punta en verde (Chromium en seis tamaños y WebKit emulado en dos), 17
+  pantallas capturadas en 8 tamaños y auditadas. El propietario dio su «sí»: las fases 3 y 4 se subieron y la app quedó
+  publicada en `https://pobrepablo.vercel.app`, donde se repitió el recorrido principal. Nada se probó en un teléfono
+  real.
 
 ## Fase 5 · Finanzas completas
 

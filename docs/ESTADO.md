@@ -4,14 +4,20 @@
 
 ## Dónde estamos
 
-**Fase 3 (datos locales) terminada. Fase 4 (primeras pantallas) construida y en la PARADA obligatoria:** falta que el
-propietario mire las capturas y dé su «sí».
+**Fases 3 (datos locales) y 4 (primeras pantallas) terminadas, subidas y publicadas** el 10 de noviembre de 2026, con
+el «sí, publícala» del propietario. La app que está en línea ya es la de verdad, no el aviso «en construcción».
 
 - Repositorio: `github.com/dojedacifuentes/pobrepablo`, **público** (ADR 0008).
 - Vercel: **publicado** en `https://pobrepablo.vercel.app`, conectado al repositorio: cada push a `main` se publica.
-  Lo que está en línea hoy es todavía el aviso «en construcción» de la fase 2.
-- **Las fases 3 y 4 están solo en este computador**, en dos commits locales (la fase 3 es `69a8e46`). No se hizo
-  push: falta el «sí».
+- En GitHub están la fase 3 (`69a8e46`) y la fase 4 (`6bd0459`).
+- **Comprobado sobre el sitio publicado** (no sobre este computador), en Chromium a 390 × 844 y 320 × 568 y en WebKit
+  emulado a 390 × 844: abre, entra al perfil Demo, registra un gasto de $1.500 en «Compras», «Disponible para gastar»
+  baja de $2.522.399 a $2.520.899, el gasto aparece en Movimientos, un enlace directo a `/movimientos` funciona, todo
+  sigue ahí al recargar, no hay desborde horizontal, la tipografía Inter carga, y no hubo ningún error de consola ni
+  archivo faltante.
+- Una aclaración que salió de esa prueba: un gasto en una categoría **con presupuesto ya apartado** (en la Demo,
+  «Transporte» o «Supermercado») no baja «Disponible para gastar», porque esa plata ya estaba descontada. Es lo
+  correcto, y conviene que la interfaz lo explique en el momento (queda anotado para la fase 5).
 
 ## Hecho
 
@@ -53,13 +59,15 @@ propietario mire las capturas y dé su «sí».
 
 ## Qué sigue
 
-1. **El «sí» del propietario** sobre las capturas (parada de la fase 4) y sobre los ADR 0009 y 0010.
-2. Con el «sí»: push, y Vercel publica solo.
+1. **Que el propietario pruebe la app publicada en su teléfono** (con el perfil Demo) y diga qué le parece.
+2. **Su decisión sobre los ADR 0009 y 0010**, que siguen como «propuesta».
 3. **Fase 5 · Finanzas completas** (ver `docs/PLAN.md`). Lo primero, porque hoy falta: **exportar y restaurar
-   respaldos desde la app**, y el onboarding.
+   respaldos desde la app**, y el onboarding. No se empieza sin que el propietario lo pida.
 
 Tareas que las fases 3 y 4 dejaron para más adelante:
 
+- Fase 5: cuando un gasto cae en una categoría con presupuesto ya apartado, decir en el aviso que «Disponible para
+  gastar» no cambia y por qué (hoy solo lo explica «¿Cómo se calcula?»).
 - Fase 5: eliminación definitiva de un movimiento, como acción explícita con advertencia. «Deshacer anular».
 - Fase 5: pedir `persist()` y mostrar su resultado y el espacio usado en Ajustes (hoy se pide al primer guardado y
   se guarda la respuesta, pero no se muestra).
@@ -78,7 +86,10 @@ Tareas que las fases 3 y 4 dejaron para más adelante:
 
 ## Lo que no está verificado
 
-- **Nada se ha probado en un teléfono real.** Chromium y WebKit se emulan en este computador.
+- **Nada se ha probado en un teléfono real.** Chromium y WebKit se emulan en este computador, también en la prueba
+  del sitio publicado.
+- **La app publicada todavía necesita internet para abrir** y no se instala en la pantalla de inicio: eso es la fase 9.
+  Los datos sí quedan guardados en el teléfono entre una visita y otra.
 - En un iPhone: el traspaso de datos de Safari a la app instalada y el comportamiento de `persist()` (ADR 0007).
 - La capa de datos contra navegadores reales: los nombres de los errores de «sin espacio» y de modo privado, y varias
   pestañas abiertas a la vez.
@@ -109,7 +120,8 @@ Tareas que las fases 3 y 4 dejaron para más adelante:
 - **El peso sobrante de un reparto empatado** le toca siempre a la misma persona (lo fija la especificación).
 - **Un arriendo compartido y además programado** aparece dos veces en el teléfono de quien no pagó hasta que confirma
   «es el mismo gasto». El dominio no lo adivina solo.
-- **Subir cada fase a GitHub al cerrarla:** falta la indicación para las fases 3 y 4.
+- **Subir cada fase a GitHub al cerrarla:** las fases 3 y 4 se subieron el 10-nov-2026 con su «sí». Ese permiso fue
+  para esas dos fases: la fase 5 vuelve a necesitar el suyo.
 
 ## Problemas conocidos y bloqueos
 
